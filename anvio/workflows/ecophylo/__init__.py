@@ -14,6 +14,7 @@ with terminal.SuppressAllOutput():
 
 from anvio.errors import ConfigError
 from anvio.workflows import WorkflowSuperClass
+from anvio.workflows.read_recruitment import ReadRecruitmentModule
 from anvio.genomedescriptions import GenomeDescriptions
 from anvio.genomedescriptions import MetagenomeDescriptions
 from anvio.artifacts.samples_txt import SamplesTxt
@@ -30,9 +31,12 @@ __email__ = "mschechter@uchicago.edu"
 
 run = terminal.Run()
 
-class EcoPhyloWorkflow(WorkflowSuperClass):
+class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
     def __init__(self, args=None, run=terminal.Run(), progress=terminal.Progress()):
         self.init_workflow_super_class(args, workflow_name='ecophylo')
+
+        # initialize the read recruitment module (adds bowtie_build, bowtie, etc.)
+        ReadRecruitmentModule.__init__(self)
 
         # Snakemake rules
         self.rules.extend(['anvi_run_hmms_hmmsearch',
@@ -48,21 +52,18 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
                            'trim_alignment',
                            'remove_sequences_with_X_percent_gaps',
                            'count_num_sequences_filtered',
-                           'subset_DNA_reps_with_QCd_AA_reps_for_mapping',
-                           'subset_external_gene_calls_file_all',
-                           'make_fasta_txt',
-                           'fasttree',
-                           'iqtree',
-                           'make_metagenomics_config_file',
-                           'run_metagenomics_workflow',
-                           'add_default_collection',
-                           'anvi_summarize',
-                           'rename_tree_tips',
+                            'subset_DNA_reps_with_QCd_AA_reps_for_mapping',
+                            'subset_external_gene_calls_file_all',
+                            'anvi_gen_contigs_database_references',
+                            'fasttree',
+                            'iqtree',
+                            'anvi_summarize',
+                            'rename_tree_tips',
                            'make_misc_data',
                            'anvi_estimate_scg_taxonomy',
-                           'make_anvio_state_file',
-                           'anvi_import_everything'
-                           ])
+                            'make_anvio_state_file',
+                            'anvi_import_everything',
+                            ])
 
         self.general_params.extend(['metagenomes']) # user needs to input a metagenomes.txt file
         self.general_params.extend(['external_genomes']) # user can add isolate genomes if needed
@@ -85,7 +86,7 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
         rule_acceptable_params_dict['remove_sequences_with_X_percent_gaps'] = ['--max-percentage-gaps']
         rule_acceptable_params_dict['fasttree'] = ['run']
         rule_acceptable_params_dict['iqtree'] = ['run', '-m', 'additional_params']
-        rule_acceptable_params_dict['run_metagenomics_workflow'] = ['clusterize', 'clusterize_submission_params', 'HPC_string', 'snakemake_additional_params', 'bowtie2_additional_params', 'anvi_profile_min_percent_identity']
+        rule_acceptable_params_dict['anvi_gen_contigs_database_references'] = ['additional_params']
 
         self.rule_acceptable_params_dict.update(rule_acceptable_params_dict)
 
@@ -112,12 +113,9 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
             'count_num_sequences_filtered': {'threads': 5},
             'subset_DNA_reps_with_QCd_AA_reps_for_mapping': {'threads': 2},
             'subset_external_gene_calls_file_all': {'threads': 2},
-            'make_fasta_txt': {'threads': 2},
+            'anvi_gen_contigs_database_references': {'threads': 4},
             'fasttree': {'run': True, 'threads': 5},
             'iqtree': {'threads': 5,'-m': "MFP"},
-            'make_metagenomics_config_file': {'threads': 1},
-            'run_metagenomics_workflow': {'threads': 2, 'clusterize': False},
-            'add_default_collection': {'threads': 2},
             'anvi_summarize': {'threads': 5},
             'rename_tree_tips': {'threads': 1},
             'make_misc_data': {'threads': 2},
@@ -138,6 +136,12 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
         self.dirs_dict.update({"SCG_NT_FASTAS": os.path.join(self.dirs_dict['HOME'],"07_SCG_NT_FASTAS")})
         self.dirs_dict.update({"RIBOSOMAL_PROTEIN_FASTAS_RENAMED": os.path.join(self.dirs_dict['HOME'],"08_RIBOSOMAL_PROTEIN_FASTAS_RENAMED")})
 
+        # ReadRecruitmentModule directories (overridden to avoid number conflicts with EcoPhylo dirs)
+        self.dirs_dict.update({"CONTIGS_DIR":  os.path.join(self.dirs_dict['HOME'], "03_REFERENCE_CONTIGS")})
+        self.dirs_dict.update({"MAPPING_DIR":  os.path.join(self.dirs_dict['HOME'], "09_MAPPING")})
+        self.dirs_dict.update({"PROFILE_DIR":  os.path.join(self.dirs_dict['HOME'], "10_ANVIO_PROFILE")})
+        self.dirs_dict.update({"MERGE_DIR":    os.path.join(self.dirs_dict['HOME'], "11_MERGED")})
+
 
     def init(self):
         """This function is called from within the Snakefile to initialize parameters."""
@@ -154,11 +158,15 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
         self.dirs_dict.update({"SCG_NT_FASTAS": os.path.join(self.dirs_dict['HOME'],"07_SCG_NT_FASTAS")})
         self.dirs_dict.update({"RIBOSOMAL_PROTEIN_FASTAS_RENAMED": os.path.join(self.dirs_dict['HOME'],"08_RIBOSOMAL_PROTEIN_FASTAS_RENAMED")})
 
+        # ReadRecruitmentModule directories (overridden to avoid number conflicts with EcoPhylo dirs)
+        self.dirs_dict.update({"CONTIGS_DIR":  os.path.join(self.dirs_dict['HOME'], "03_REFERENCE_CONTIGS")})
+        self.dirs_dict.update({"MAPPING_DIR":  os.path.join(self.dirs_dict['HOME'], "09_MAPPING")})
+        self.dirs_dict.update({"PROFILE_DIR":  os.path.join(self.dirs_dict['HOME'], "10_ANVIO_PROFILE")})
+        self.dirs_dict.update({"MERGE_DIR":    os.path.join(self.dirs_dict['HOME'], "11_MERGED")})
+
         # Make log directories
         if not os.path.exists(os.path.join(self.dirs_dict['HOME'], '00_LOGS/')):
             os.makedirs(os.path.join(self.dirs_dict['HOME'], '00_LOGS/'))
-        if not os.path.exists(os.path.join(self.dirs_dict['HOME'],'METAGENOMICS_WORKFLOW/00_LOGS/')):
-            os.makedirs(os.path.join(self.dirs_dict['HOME'],'METAGENOMICS_WORKFLOW/00_LOGS/'))
 
         self.names_list = []
         self.contigs_db_name_path_dict = {}
@@ -205,8 +213,8 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
                     with open(sanity_checked_metagenomes_file, 'w') as fp:
                         pass
                 else:
-                    self.run.warning(f"You have declared run_genomes_sanity_check == false. anvi'o takes no responsibility "
-                                     f"for any genomes or metagenomes that cause issues downstream in ecophylo.")
+                    self.run.warning(f"Sanity check was already performed for metagenomes (the file {sanity_checked_metagenomes_file} exists). "
+                                     f"If you changed your metagenomes.txt, please delete that file and re-run.")
                     self.metagenomes_name_list = self.metagenomes_df.name.to_list()
                     self.metagenomes_path_list = self.metagenomes_df.contigs_db_path.to_list()
             else:
@@ -284,38 +292,50 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
             self.run.warning(f"Since you did not provide a samples.txt, EcoPhylo will assume you do not want "
                              f"to profile the ecology of your proteins and will just be making trees for now!")
 
+        # Populate ReadRecruitmentModule interface attributes
+        if self.samples_txt_file:
+            self.readsets = [
+                {
+                    'id': s,
+                    'type': 'SR',
+                    'reads': self.samples_txt.sample_d[s],
+                    'base_sample': s,
+                }
+                for s in self.sample_names_for_mapping_list
+            ]
+        else:
+            self.readsets = []
+
+        self.group_names = list(set(value['group'] for value in self.hmm_dict.values()))
+        self.group_sizes = {group: len(self.readsets) for group in self.group_names}
+
+        self.fasta_information = {}
+        for group in self.group_names:
+            self.fasta_information[group] = {
+                'path': os.path.join(
+                    self.dirs_dict['RIBOSOMAL_PROTEIN_FASTAS'],
+                    group,
+                    f"{group}-references_for_mapping_NT.fa",
+                ),
+                'external_gene_calls': os.path.join(
+                    self.dirs_dict['RIBOSOMAL_PROTEIN_FASTAS'],
+                    group,
+                    f"{group}-external_gene_calls_subset.tsv",
+                ),
+            }
+
+        self.references_mode = True
+        self.remove_short_reads_based_on_references = False
+        self.references_for_removal = {}
+        self.run_qc = False
+        self.set_config_param('all_against_all', True)
+
         # Pick which tree algorithm
         self.run_iqtree = self.get_param_value_from_config(['iqtree', 'run'])
         self.run_fasttree = self.get_param_value_from_config(['fasttree', 'run'])
 
         if not self.run_iqtree and not self.run_fasttree:
             raise ConfigError("Please choose either iqtree or fasttree in your config file to run your phylogenetic tree.")
-
-        # HPC submission of metagenomics workflow of EcoPhylo
-        self.clusterize_metagenomics_workflow = self.get_param_value_from_config(['run_metagenomics_workflow', 'clusterize'])
-        self.clusterize_metagenomics_submission_params = self.get_param_value_from_config(['run_metagenomics_workflow', 'clusterize_submission_params'])
-        self.metagenomics_workflow_HPC_string = self.get_param_value_from_config(['run_metagenomics_workflow', 'HPC_string'])
-        self.metagenomics_workflow_snakemake_additional_params = self.get_param_value_from_config(['run_metagenomics_workflow', 'snakemake_additional_params'])
-
-        self.bowtie2_additional_params = self.get_param_value_from_config(['run_metagenomics_workflow','bowtie2_additional_params'])
-        self.anvi_profile_min_percent_identity = self.get_param_value_from_config(['run_metagenomics_workflow','anvi_profile_min_percent_identity'])
-
-        metagenomics_workflow_snakemake_additional_params_list = self.metagenomics_workflow_snakemake_additional_params.split(' ')
-
-        if self.clusterize_metagenomics_workflow:
-            if not self.metagenomics_workflow_snakemake_additional_params:
-                raise ConfigError("If you are going to use Evan's 'clusterize' (https://github.com/ekiefl/clusterize) with  "
-                                  "the metagenomics workflow aspect of EcoPhylo you must provide the '--jobs' in snakemake_additional_params "
-                                  "so Snakemake knows how many jobs to run at the same time on the HPC.")
-
-            jobs_param = any("--jobs" in param for param in metagenomics_workflow_snakemake_additional_params_list)
-            if jobs_param == False:
-                raise ConfigError("The EcoPhylo workflow did not detect the parameter '--jobs' in `snakemake_additional_params`. "
-                                  "Please include '--jobs'. You can read about it with snakemake -h")
-
-            if self.metagenomics_workflow_HPC_string:
-                raise ConfigError("You can't clusterize and provide an HPC_string for the metagenomics workflow at the same time. "
-                                  "Please choose one or the other. ")
 
         # Pick clustering method
         self.cluster_representative_method = self.get_param_value_from_config(['cluster_representative_method', 'method'])
@@ -370,10 +390,10 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
 
             else:
                 # PROFILE-MODE
-                target_file = os.path.join(self.dirs_dict['HOME'], "METAGENOMICS_WORKFLOW", f"{group}_state_imported_profile.done")
+                target_file = os.path.join(self.dirs_dict['MERGE_DIR'], f"{group}", f"{group}_state_imported_profile.done")
                 target_files.append(target_file)
 
-                target_file = os.path.join(self.dirs_dict['HOME'], "METAGENOMICS_WORKFLOW", "07_SUMMARY", f"{group}_summarize.done")
+                target_file = os.path.join(self.dirs_dict['MERGE_DIR'], f"{group}", f"{group}_summarize.done")
                 target_files.append(target_file)
 
         return target_files
@@ -397,18 +417,6 @@ class EcoPhyloWorkflow(WorkflowSuperClass):
             target_files.append(target_file)
 
         return target_files
-
-    def get_input_files_fasta_txt(self):
-        """This function return a list of input file for the rule that makes the fasta-txt file"""
-
-        input_files = []
-
-        for hmm, value in self.hmm_dict.items():
-            group = value['group']
-            input_file = os.path.join(self.dirs_dict['RIBOSOMAL_PROTEIN_FASTAS'],  f"{group}", f"{group}-external_gene_calls_subset.tsv")
-            input_files.append(input_file)
-
-        return input_files
 
     def get_input_files_combine_sequence_data(self, group):
         """This function return a list of input file for the rule combine_sequence_data"""

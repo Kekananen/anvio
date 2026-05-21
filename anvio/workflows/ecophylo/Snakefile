@@ -1102,10 +1102,10 @@ rule count_num_sequences_filtered:
 
             num_seqs = 0
 
-        for line in fasta:
-            if line.startswith(">"):
-                num_seqs += 1
-        return num_seqs
+            for line in fasta:
+                if line.startswith(">"):
+                    num_seqs += 1
+            return num_seqs
         input_files_list = [
             params.combined_seq,
             params.cluster_mmseqs,
@@ -1201,42 +1201,22 @@ there are NO repeating gene-callers-id values.
         "scripts/subset_external_gene_calls_file.py"
 
 
-rule make_fasta_txt:
-    """Format a fasta.txt with the filtered NT sequences for profiling in metagenomics workflow"""
+rule anvi_gen_contigs_database_references:
+    """Create contigs databases from reference FASTA + external gene calls for read recruitment"""
     input:
-        fasta=M.get_input_files_fasta_txt(),
+        fasta=lambda w: M.fasta_information[w.group]['path'],
+        external_gene_calls=lambda w: M.fasta_information[w.group]['external_gene_calls'],
     output:
-        fasta_txt=os.path.join(dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "fasta.txt"),
+        db=M.get_contigs_db_path(),
     log:
-        os.path.join(dirs_dict["LOGS_DIR"], "make_fasta_txt.log"),
-    threads: M.T("make_fasta_txt")
+        os.path.join(dirs_dict["LOGS_DIR"], "anvi_gen_contigs_database_references-{group}.log"),
+    threads: M.T("anvi_gen_contigs_database_references")
     run:
-        with open(output.fasta_txt, "a") as fasta_txt:
-            # fasta-txt header
-            fasta_txt.write("name\tpath\texternal_gene_calls\n")
-            # per unique group name
-            unique_group = []
-            for hmm, value in M.hmm_dict.items():
-                group = value["group"]
-                if group not in unique_group:
-                    # terrible hack with two .. in the relative path
-                    fasta = os.path.join(
-                        "..",
-                        "..",
-                        dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
-                        f"{group}",
-                        f"{group}-references_for_mapping_NT.fa",
-                    )
-                    external_gene_calls = os.path.join(
-                        "..",
-                        "..",
-                        dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
-                        f"{group}",
-                        f"{group}-external_gene_calls_subset.tsv",
-                    )
-                    line = [group, fasta, external_gene_calls]
-                    fasta_txt.write("\t".join(line) + "\n")
-                    unique_group.append(group)
+        shell(f"mkdir -p {os.path.dirname(output.db)} && "
+              f"anvi-gen-contigs-database -f {{input.fasta}} "
+              f"--external-gene-calls {{input.external_gene_calls}} "
+              f"--project-name {{wildcards.group}} "
+              f"-o {{output.db}} >> {{log}} 2>&1")
 
 
 if M.run_iqtree == True:
@@ -1676,6 +1656,7 @@ rule anvi_estimate_scg_taxonomy:
 if M.samples_txt_file:
 
     # PROFILE-MODE with read recruitment
+    include: w.get_workflow_rule_file_path("read_recruitment")
     include: "rules/profile_mode.smk"
 
 else:

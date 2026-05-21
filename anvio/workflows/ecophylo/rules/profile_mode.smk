@@ -1,173 +1,24 @@
 # profile-mode with read recruitment
 
 
-rule make_metagenomics_config_file:
-    """Make a METAGENOMICS WORKFLOW config.json customized for ECOPHYLO_WORKFLOW - PROFILE MODE"""
-    input:
-        done=rules.make_fasta_txt.output.fasta_txt,
-    output:
-        config=os.path.join(
-            dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "metagenomics_config.json"
-        ),
-    log:
-        os.path.join(dirs_dict["LOGS_DIR"], "make_metagenomics_config_file.log"),
-    threads: M.T("make_metagenomics_config_file")
-    run:
-        shell(
-            "anvi-run-workflow -w metagenomics --get-default-config {output.config}"
-        )
-        config = open(output.config)
-        config_dict = json.load(config)
-        config_dict["fasta_txt"] = "fasta.txt"
-        sample_txt_path = M.samples_txt_file
-        config_dict["samples_txt"] = sample_txt_path
-        config_dict["references_mode"] = True
-        config_dict["anvi_run_hmms"]["run"] = False
-        config_dict["anvi_script_reformat_fasta"]["run"] = False
-        config_dict["anvi_run_kegg_kofams"]["run"] = False
-        config_dict["anvi_run_ncbi_cogs"]["run"] = False
-        config_dict["anvi_run_scg_taxonomy"]["run"] = False
-        config_dict["anvi_run_trna_scan"]["run"] = False
-        config_dict["iu_filter_quality_minoche"]["run"] = False
-        config_dict["anvi_profile"]["--min-contig-length"] = 0
-        config_dict["anvi_profile"]["--profile-SCVs"] = True
-        config_dict["bowtie"]["threads"] = 5
-        config_dict["bowtie_build"]["threads"] = 5
-        config_dict["anvi_gen_contigs_database"]["threads"] = 5
-        config_dict["anvi_init_bam"]["threads"] = 2
-        config_dict["anvi_profile"]["--profile-SCVs"] = True
-        if M.clusterize_metagenomics_workflow == True:
-            config_dict["bowtie"]["threads"] = 10
-            config_dict["anvi_profile"]["threads"] = 10
-            config_dict["anvi_merge"]["threads"] = 10
-        if M.bowtie2_additional_params:
-            config_dict["bowtie"]["additional_params"] = " ".join(
-                ["--no-unal", M.bowtie2_additional_params]
-            )
-        if M.anvi_profile_min_percent_identity:
-            config_dict["anvi_profile"][
-                "--min-percent-identity"
-            ] = M.anvi_profile_min_percent_identity
-        with open(output.config, "w") as outfile:
-            json.dump(config_dict, outfile, indent=4)
-
-
-rule run_metagenomics_workflow:
-    """Run metagenomics workflow to profile hmm_hits"""
-    input:
-        config=rules.make_metagenomics_config_file.output.config,
-    output:
-        done=touch(
-            os.path.join(
-                dirs_dict["HOME"],
-                "METAGENOMICS_WORKFLOW",
-                "metagenomics_workflow.done",
-            )
-        ),
-    log:
-        "00_LOGS/run_metagenomics_workflow.log",
-    threads: M.T("run_metagenomics_workflow")
-    run:
-        metagenomics_workflow_path = os.path.join(
-            dirs_dict["HOME"], "METAGENOMICS_WORKFLOW"
-        )
-        # Convert r1 and r2 to absolute paths
-        samples_txt_new_path = os.path.join(
-            metagenomics_workflow_path, M.samples_txt_file
-        )
-        M.samples_txt.write_tsv(samples_txt_new_path, absolute_paths=True)
-        log_path = os.path.join(
-            dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "00_LOGS"
-        )
-        log_file = os.path.join(log_path, "run_metagenomics_workflow.log")
-        log = os.path.join("00_LOGS", "run_metagenomics_workflow.log")
-        shell(f"mkdir -p {log_path} && touch {log_file}")
-        if M.clusterize_metagenomics_workflow == True:
-            # If we are using slurm and clusterize: https://github.com/ekiefl/clusterize
-            shell(
-                'cd {metagenomics_workflow_path} && anvi-run-workflow -w metagenomics -c metagenomics_config.json --additional-params --cluster "clusterize -j={{rule}} -o={{log}} -n={{threads}} {M.clusterize_metagenomics_submission_params} -x" {M.metagenomics_workflow_snakemake_additional_params} --latency-wait 100 --keep-going --rerun-incomplete &> {log} && cd -'
-            )
-        elif M.metagenomics_workflow_HPC_string:
-            # User-defined --cluster string: https://snakemake.readthedocs.io/en/stable/executing/cluster.html
-            shell(
-                'cd {metagenomics_workflow_path} && anvi-run-workflow -w metagenomics -c metagenomics_config.json --additional-params --cluster "{M.metagenomics_workflow_HPC_string}" {M.metagenomics_workflow_snakemake_additional_params} --rerun-incomplete --latency-wait 100 --keep-going &> {log} && cd -'
-            )
-        else:
-            # Running snakemake on local
-            shell(
-                "cd {metagenomics_workflow_path} && anvi-run-workflow -w metagenomics -c metagenomics_config.json --additional-params {M.metagenomics_workflow_snakemake_additional_params} --rerun-incomplete --latency-wait 100 --keep-going &> {log} && cd -"
-            )
-
-
-rule add_default_collection:
-    """Make default collection for profile-db that contains all splits"""
-    input:
-        metagenomics_workflow_done=rules.run_metagenomics_workflow.output.done,
-    output:
-        done=touch(
-            os.path.join(
-                dirs_dict["HOME"],
-                "METAGENOMICS_WORKFLOW",
-                "{group}_add_default_collection.done",
-            )
-        ),
-    log:
-        os.path.join(dirs_dict["LOGS_DIR"], "add_default_collection_{group}.log"),
-    threads: M.T("add_default_collection")
-    params:
-        contigsDB=ancient(
-            os.path.join(
-                dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "03_CONTIGS", "{group}.db"
-            )
-        ),
-        profileDB=os.path.join(
-            dirs_dict["HOME"],
-            "METAGENOMICS_WORKFLOW",
-            "06_MERGED",
-            "{group}",
-            "PROFILE.db",
-        ),
-    run:
-        shell(
-            "anvi-script-add-default-collection -c {params.contigsDB} -p {params.profileDB}"
-        )
-
-
 rule anvi_summarize:
-    """Get coverage values for hmm_hits"""
+    """Summarize merged profile for hmm_hits"""
     input:
-        done=rules.add_default_collection.output.done,
+        profileDB=ancient(os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db")),
     output:
         done=touch(
-            os.path.join(
-                dirs_dict["HOME"],
-                "METAGENOMICS_WORKFLOW",
-                "07_SUMMARY",
-                "{group}_summarize.done",
-            )
+            os.path.join(dirs_dict["MERGE_DIR"], "{group}", "{group}_summarize.done")
         ),
     log:
         os.path.join(dirs_dict["LOGS_DIR"], "anvi_summarize_{group}.log"),
     threads: M.T("anvi_summarize")
     params:
-        contigsDB=ancient(
-            os.path.join(
-                dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "03_CONTIGS", "{group}.db"
-            )
-        ),
-        profileDB=os.path.join(
-            dirs_dict["HOME"],
-            "METAGENOMICS_WORKFLOW",
-            "06_MERGED",
-            "{group}",
-            "PROFILE.db",
-        ),
-        output_dir=os.path.join(
-            dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "07_SUMMARY", "{group}"
-        ),
+        contigsDB=ancient(M.get_contigs_db_path()),
+        output_dir=os.path.join(dirs_dict["MERGE_DIR"], "{group}", "SUMMARY"),
     run:
         shell(
-            "anvi-summarize -c {params.contigsDB} -p {params.profileDB} -o {params.output_dir} -C DEFAULT --init-gene-coverages --just-do-it >> {log} 2>&1"
+            "anvi-script-add-default-collection -c {params.contigsDB} -p {input.profileDB} >> {log} 2>&1 && "
+            "anvi-summarize -c {params.contigsDB} -p {input.profileDB} -o {params.output_dir} -C DEFAULT --light-summary --just-do-it >> {log} 2>&1"
         )
 
 
@@ -177,8 +28,8 @@ rule make_anvio_state_file:
         source=M.get_target_files_make_anvio_state_file(),
     output:
         state_file=os.path.join(
-            dirs_dict["HOME"],
-            "METAGENOMICS_WORKFLOW",
+            dirs_dict["MERGE_DIR"],
+            "{group}",
             "{group}_ECOPHYLO_WORKFLOW_state.json",
         ),
     log:
@@ -331,12 +182,12 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
     input:
         tree=rules.rename_tree_tips.output.tree,
         state=rules.make_anvio_state_file.output.state_file,
-        done=rules.run_metagenomics_workflow.output.done,
+        profileDB=ancient(os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db")),
     output:
         done=touch(
             os.path.join(
-                dirs_dict["HOME"],
-                "METAGENOMICS_WORKFLOW",
+                dirs_dict["MERGE_DIR"],
+                "{group}",
                 "{group}_state_imported_profile.done",
             )
         ),
@@ -345,19 +196,13 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
     threads: M.T("anvi_import_state")
     params:
         tax_data_final=rules.anvi_estimate_scg_taxonomy.params.tax_data_final,
-        profileDB=os.path.join(
-            dirs_dict["HOME"],
-            "METAGENOMICS_WORKFLOW",
-            "06_MERGED",
-            "{group}",
-            "PROFILE.db",
-        ),
+        profileDB=os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db"),
         tree_profileDB=os.path.join(dirs_dict["TREES"], "{group}", "{group}-PROFILE.db"),
         misc_data=rules.make_misc_data.output.misc_data_final,
     run:
         state = os.path.join(
-            dirs_dict["HOME"],
-            "METAGENOMICS_WORKFLOW",
+            dirs_dict["MERGE_DIR"],
+            f"{wildcards.group}",
             f"{wildcards.group}_ECOPHYLO_WORKFLOW_state.json",
         )
         shell("echo -e 'Step 1: anvi-import-state:\n' >> {log}")
