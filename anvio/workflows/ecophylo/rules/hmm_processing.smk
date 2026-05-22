@@ -78,24 +78,11 @@ rule anvi_run_hmms_hmmsearch:
             f"{wildcards.sample_name}",
             f"{hmm_source}-dom-hmmsearch",
         )
-        if M.metagenomes:
-            if wildcards.sample_name in M.metagenomes_name_list:
-                threads = (
-                    M.get_param_value_from_config(
-                        ["anvi_run_hmms_hmmsearch", "threads_metagenomes"]
-                    ),
-                )
-                threads = int(threads[0])
-        else:
-            threads = (
-                M.get_param_value_from_config(
-                    ["anvi_run_hmms_hmmsearch", "threads_genomes"]
-                ),
-            )
+        threads = get_hmm_threads(wildcards)
         domtblout = os.path.join(
             dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
-            f"{wildcards.sample_name}-{hmm_source}",
-            "dom-hmmsearch",
+            f"{wildcards.sample_name}",
+            f"{hmm_source}-dom-hmmsearch",
             "hmm.domtable",
         )
         # Run different hmm search depending on whether a hmm is internal or external because anvio

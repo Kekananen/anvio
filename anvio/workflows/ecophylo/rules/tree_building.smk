@@ -78,9 +78,9 @@ rule rename_tree_tips:
 
             t = Tree(tree)
 
-        for leaf in t:
-            leaf.name = leaf.name + "_split_00001"
-        t.write(format=1, outfile=outfile)
+            for leaf in t:
+                leaf.name = leaf.name + "_split_00001"
+            t.write(format=1, outfile=outfile)
         if M.run_iqtree == True:
             add_split_name_to_tree_tips(tree=params.iqtree, outfile=output.tree)
         elif M.run_fasttree == True:
@@ -101,15 +101,15 @@ rule rename_tree_tips:
 
             fasta = open(str(fasta))
 
-        newfasta = open(outfile, "a")
-        for line in fasta:
-            if line.startswith(">"):
-                newname = line.rstrip("\n") + "_split_00001\n"
-                newfasta.write(newname)
-            else:
-                newfasta.write(line)
-        fasta.close()
-        newfasta.close()
+            newfasta = open(outfile, "a")
+            for line in fasta:
+                if line.startswith(">"):
+                    newname = line.rstrip("\n") + "_split_00001\n"
+                    newfasta.write(newname)
+                else:
+                    newfasta.write(line)
+            fasta.close()
+            newfasta.close()
         add_split_name_to_fasta_headers(params.fasta, output.fasta)
         add_split_name_to_fasta_headers(params.fasta_all, output.fasta_all)
         shell("touch {output.done}")

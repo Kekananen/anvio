@@ -252,27 +252,12 @@ if M.cluster_representative_method == "cluster_rep_with_coverages":
                 how="inner",
             )[["representative", "cluster_members", "mean_cov"]]
 
-            def get_new_seed(df):
-                """This function extracts the hmm_hits table from a contigs-db
+            def get_new_seed(group):
+                """Find the cluster member with the highest coverage and set it as the new representative."""
+                best_member = group.loc[group["mean_cov"].idxmax(), "cluster_members"]
+                group["representative"] = best_member
+                return group
 
-    Parameters
-    ==========
-    contigs_db
-
-    out_file : str
-        Output file path for hmm_hits.tsv
-
-    Returns
-    =======
-    hmm_hits.tsv : tsv
-    """
-
-                new_seed = df[df["mean_cov"] == df["mean_cov"].max()][
-                    "cluster_members"
-                ].iloc[0]
-
-            df["representative"] = [new_seed] * len(df)
-            return df
             df3 = df2.groupby("representative").apply(get_new_seed)
             # export headers of representatives and cluster rep index
             df3[["representative"]].drop_duplicates().to_csv(
@@ -456,7 +441,7 @@ rule count_num_sequences_filtered:
             clustering_threshold_attributes_list.append(
                 clustering_threshold_attributes
             )
-        with open(output[0], "w") as f:
+        with open(output.target, "w") as f:
             col_names = ["rule_name", "num_sequences_left", "rel_path"]
             step1 = [
                 "combine_sequence_data",
