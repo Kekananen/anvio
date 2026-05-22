@@ -15,6 +15,9 @@ from pathlib import Path
 WORKFLOWS_ROOT = Path(__file__).resolve().parents[2]
 
 
+METAGENOMICS_RULE_FILES = sorted((WORKFLOWS_ROOT / 'metagenomics' / 'rules').glob('*.smk'))
+
+
 WORKFLOWS = {
     'contigs': {
         'module': WORKFLOWS_ROOT / 'contigs' / '__init__.py',
@@ -35,6 +38,12 @@ WORKFLOWS = {
     'metagenomics': {
         'module': WORKFLOWS_ROOT / 'metagenomics' / '__init__.py',
         'snakefile': WORKFLOWS_ROOT / 'metagenomics' / 'Snakefile',
+        'extra_snakefiles': [
+            WORKFLOWS_ROOT / 'read_recruitment' / 'rules' / 'main.smk',
+            WORKFLOWS_ROOT / 'qc' / 'rules' / 'sr_filter.smk',
+            WORKFLOWS_ROOT / 'qc' / 'rules' / 'lr.smk',
+            WORKFLOWS_ROOT / 'qc' / 'rules' / 'multiqc.smk',
+        ],
         'rules': {
             'iu_filter_quality_minoche',
             'megahit',
@@ -122,10 +131,6 @@ WORKFLOWS = {
     'ecophylo': {
         'module': WORKFLOWS_ROOT / 'ecophylo' / '__init__.py',
         'snakefile': WORKFLOWS_ROOT / 'ecophylo' / 'Snakefile',
-        'extra_snakefiles': [
-            WORKFLOWS_ROOT / 'ecophylo' / 'rules' / 'profile_mode.smk',
-            WORKFLOWS_ROOT / 'ecophylo' / 'rules' / 'tree_mode.smk',
-        ],
         'rules': {
             'anvi_run_hmms_hmmsearch',
             'filter_hmm_hits_by_model_coverage',
@@ -162,14 +167,20 @@ def snakefile_rule_names(paths):
     return rule_names
 
 
+def workflow_snakefiles(contract):
+    paths = [contract['snakefile']]
+    rules_dir = contract['snakefile'].parent / 'rules'
+    if rules_dir.exists():
+        paths.extend(sorted(rules_dir.glob('*.smk')))
+    paths.extend(contract.get('extra_snakefiles', []))
+    return paths
+
+
 class BiologicalWorkflowContractTestCase(unittest.TestCase):
     def test_each_workflow_keeps_domain_defining_rules(self):
         for workflow_name, contract in WORKFLOWS.items():
             with self.subTest(workflow=workflow_name):
-                paths = [contract['snakefile']]
-                paths.extend(contract.get('extra_snakefiles', []))
-
-                rule_names = snakefile_rule_names(paths)
+                rule_names = snakefile_rule_names(workflow_snakefiles(contract))
                 self.assertTrue(contract['rules'].issubset(rule_names),
                                 f"{workflow_name} is missing expected biological rules: "
                                 f"{sorted(contract['rules'] - rule_names)}")
@@ -187,13 +198,17 @@ class BiologicalWorkflowContractTestCase(unittest.TestCase):
 
     def test_short_and_long_read_metagenomics_paths_remain_distinct(self):
         snakefile_text = read_text(WORKFLOWS['metagenomics']['snakefile'])
+        read_recruitment_text = read_text(WORKFLOWS_ROOT / 'read_recruitment' / 'rules' / 'main.smk')
+        combined_text = snakefile_text + read_recruitment_text + ''.join(
+            read_text(path) for path in METAGENOMICS_RULE_FILES
+        )
 
         self.assertIn('SR_RS_RE = w.regex_from_ids(SR_READSETS)', snakefile_text)
         self.assertIn('LR_RS_RE = w.regex_from_ids(LR_READSETS)', snakefile_text)
-        self.assertRegex(snakefile_text, r'group\s*=\s*SR_GRP_RE')
-        self.assertRegex(snakefile_text, r'group\s*=\s*LR_GRP_RE')
-        self.assertIn('bowtie2', snakefile_text)
-        self.assertIn('minimap2', snakefile_text)
+        self.assertRegex(combined_text, r'group\s*=\s*SR_GRP_RE')
+        self.assertRegex(combined_text, r'group\s*=\s*LR_GRP_RE')
+        self.assertIn('bowtie2', combined_text)
+        self.assertIn('minimap2', combined_text)
 
 
     def test_ecophylo_preserves_profile_and_tree_modes(self):

@@ -11,8 +11,9 @@ import anvio.filesnpaths as filesnpaths
 
 from anvio import utils as u
 from anvio.drivers import driver_modules
-from anvio.workflows import WorkflowSuperClass
+from anvio.workflows import WorkflowSuperClass, LR_TECHNOLOGY_MAP
 from anvio.workflows.contigs import ContigsDBWorkflow
+from anvio.workflows.qc import QCModule
 from anvio.workflows.read_recruitment import ReadRecruitmentModule
 from anvio.errors import ConfigError
 from anvio.artifacts.samples_txt import SamplesTxt
@@ -29,9 +30,8 @@ __email__ = "alon.shaiber@gmail.com"
 run = terminal.Run()
 progress = terminal.Progress()
 
-min_contig_length_for_assembly = 1000
 
-class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSuperClass):
+class MetagenomicsWorkflow(QCModule, ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSuperClass):
     def __init__(self, args=None, run=terminal.Run(), progress=terminal.Progress()):
         self.init_workflow_super_class(args, workflow_name='metagenomics')
 
@@ -54,62 +54,13 @@ class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSup
         # initialize the base classes
         ContigsDBWorkflow.__init__(self)
         ReadRecruitmentModule.__init__(self)
+        QCModule.__init__(self)
 
-        self.rules.extend(['iu_gen_configs', 'iu_filter_quality_minoche', 'gen_qc_report', 'gzip_fastqs',
-                     'merge_fastqs_for_co_assembly', 'megahit', 'merge_fastas_for_co_assembly',
+        self.rules.extend(['merge_fastqs_for_co_assembly', 'megahit', 'merge_fastas_for_co_assembly',
                      'idba_ud', 'metaspades', 'flye',
                      'anvi_cluster_contigs',
                      'krakenuniq', 'krakenuniq_mpa_report', 'import_krakenuniq_taxonomy',
                      'remove_short_reads_based_on_references', 'anvi_summarize', 'anvi_split'])
-
-        self.general_params.extend(['samples_txt', "references_mode", "all_against_all",
-                                    "kraken_txt", "collections_txt", "read_type_suffix"])
-
-        rule_acceptable_params_dict = {}
-
-        # defining the accesible params per rule. NOTE --threads is a parameter for every rule
-        # and is not explicitly provided in what follows
-        rule_acceptable_params_dict['iu_gen_configs'] = ["--r1-prefix", "--r2-prefix"]
-        rule_acceptable_params_dict['iu_filter_quality_minoche'] = ['run', '--visualize-quality-curves', '--ignore-deflines', '--limit-num-pairs', '--print-qual-scores', '--store-read-fate']
-        rule_acceptable_params_dict['gzip_fastqs'] = ["run"]
-
-        # add parameters for modifying binning algorithms
-        additional_params_for_anvi_cluster_contigs = [self.get_param_name_for_binning_driver(d) for d in driver_modules['binning'].keys()]
-        rule_acceptable_params_dict['anvi_cluster_contigs'] = ["run", "--collection-name", "--driver", "--just-do-it"]
-        rule_acceptable_params_dict['anvi_cluster_contigs'].extend(additional_params_for_anvi_cluster_contigs)
-
-        rule_acceptable_params_dict['anvi_summarize'] = ["additional_params", "run"]
-        rule_acceptable_params_dict['anvi_split'] = ["additional_params", "run"]
-        rule_acceptable_params_dict['metaspades'] = ["run", "conda_yaml", "conda_env", "additional_params", "use_scaffolds"]
-        rule_acceptable_params_dict['megahit'] = ["run", "conda_yaml", "conda_env", "--min-contig-len", "--min-count", "--k-min",
-                                                  "--k-max", "--k-step", "--k-list",
-                                                  "--no-mercy", "--no-bubble", "--merge-level",
-                                                  "--prune-level", "--prune-depth", "--low-local-ratio",
-                                                  "--max-tip-len", "--no-local", "--kmin-1pass",
-                                                  "--presets", "--memory", "--mem-flag",
-                                                  "--use-gpu", "--gpu-mem", "--keep-tmp-files",
-                                                  "--tmp-dir", "--continue", "--verbose"]
-        rule_acceptable_params_dict['idba_ud'] = ["run", "conda_yaml", "conda_env", "--mink", "--maxk", "--step", "--inner_mink",
-                                                  "--inner_step", "--prefix", "--min_count",
-                                                  "--min_support", "--seed_kmer", "--min_contig",
-                                                  "--similar", "--max_mismatch", "--min_pairs",
-                                                  "--no_bubble", "--no_local", "--no_coverage",
-                                                  "--no_correct", "--pre_correction", "use_scaffolds"]
-        rule_acceptable_params_dict['flye'] = ["run", "conda_yaml", "conda_env", "--meta", "--pacbio-raw", "--pacbio-corr",
-                                                   "--pacbio-hifi", "--nano-raw", "--nano-corr",
-                                                   "--nano-hq", "--genome-size", "--iterations",
-                                                   "--min-overlap", "--read-error", "--keep-haplotypes",
-                                                   "--no-alt-contigs", "--scaffold", "--polish-target",
-                                                   "additional_params", "threads"]
-        rule_acceptable_params_dict['merge_fastas_for_co_assembly'] = []
-        rule_acceptable_params_dict['merge_fastqs_for_co_assembly'] = []
-        rule_acceptable_params_dict['krakenuniq'] = ["additional_params", "run", "--db", "--gzip-compressed"]
-        rule_acceptable_params_dict['import_krakenuniq_taxonomy'] = ["--min-abundance"]
-        rule_acceptable_params_dict['remove_short_reads_based_on_references'] = ["dont_remove_just_map",
-                                                                                 "references_for_removal_txt",
-                                                                                 "delimiter-for-iu-remove-ids-from-fastq"]
-
-        self.rule_acceptable_params_dict.update(rule_acceptable_params_dict)
 
         forbidden_params = {}
         forbidden_params['krakenuniq'] = ['--fastq-input', '--paired', '--output']
@@ -123,17 +74,6 @@ class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSup
                                "SUMMARY_DIR": "08_SUMMARY",
                                "SPLIT_PROFILES_DIR": "09_SPLIT_PROFILES"})
 
-        self.default_config.update({'samples_txt': "samples.txt",
-                                    'read_type_suffix': 'auto',
-                                    'metaspades': {"additional_params": "--only-assembler", "threads": 7},
-                                    'megahit': {"--min-contig-len": min_contig_length_for_assembly, "--memory": 0.4, "threads": 7},
-                                    'idba_ud': {"--min_contig": min_contig_length_for_assembly, "threads": 7},
-                                    'flye': {"run": False, "threads": 7, "additional_params": "", "--meta": True, "--pacbio-hifi": True},
-                                    'iu_filter_quality_minoche': {"run": True, "--ignore-deflines": True},
-                                    "gzip_fastqs": {"run": True},
-                                    "krakenuniq": {"threads": 3, "--gzip-compressed": True, "additional_params": ""},
-                                    "remove_short_reads_based_on_references": {"delimiter-for-iu-remove-ids-from-fastq": " "},
-                                    "anvi_cluster_contigs": {"--collection-name": "{driver}"}})
 
 
     def init(self):
@@ -184,7 +124,7 @@ class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSup
                 raise ConfigError("Multiple long-read assemblers are enabled; please enable Flye")
 
         # sanity check for conda env: use either conda_yaml or conda_env, not both
-        for tool in ['flye','minimap2','bowtie','megahit','metaspades','idba_ud']:
+        for tool in ['flye','minimap2','bowtie','megahit','metaspades','idba_ud','longqc','filtlong']:
             y = self.get_param_value_from_config([tool, 'conda_yaml'])
             n = self.get_param_value_from_config([tool, 'conda_env'])
             if (y and y.strip()) and (n and n.strip()):
@@ -198,10 +138,15 @@ class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSup
         self.ensure_tool_in_path_or_conda('flye', 'flye')
         self.ensure_tool_in_path_or_conda('bowtie', 'bowtie2')
         self.ensure_tool_in_path_or_conda('minimap2', 'minimap2')
+        self.ensure_tool_in_path_or_conda('longqc', 'LongQC.py')
+        self.ensure_tool_in_path_or_conda('filtlong', 'filtlong')
 
         self.use_scaffold_from_metaspades = self.get_param_value_from_config(['metaspades', 'use_scaffolds'])
         self.use_scaffold_from_idba_ud = self.get_param_value_from_config(['idba_ud', 'use_scaffolds'])
         self.run_qc = self.get_param_value_from_config(['iu_filter_quality_minoche', 'run']) == True
+        self.run_lr_qc = self.get_param_value_from_config(['longqc', 'run']) == True
+        self.run_filtlong = self.get_param_value_from_config(['filtlong', 'run']) == True
+        self.run_multiqc = self.get_param_value_from_config(['multiqc', 'run']) == True
         self.run_summary = self.get_param_value_from_config(['anvi_summarize', 'run']) == True
         self.run_split = self.get_param_value_from_config(['anvi_split', 'run']) == True
         self.references_mode = self.get_param_value_from_config('references_mode')
@@ -269,9 +214,7 @@ class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSup
                              g + "-steps", "annotate_contigs_database.done") for g in self.group_names]
         target_files.extend(contigs_annotated)
 
-        if self.run_qc:
-            qc_report = os.path.join(self.dirs_dict["QC_DIR"], "qc-report.txt")
-            target_files.append(qc_report)
+        target_files.extend(self.get_qc_target_files())
 
         if self.references_for_removal_txt:
             filter_report = os.path.join(self.dirs_dict["QC_DIR"], "short-read-removal-report.txt")
@@ -651,6 +594,46 @@ class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSup
         return files
 
 
+    def get_flye_flag_for_group(self, group_id):
+        """Return the single flye read-type flag (e.g. '--nano-raw') for a group's LR reads.
+
+        Raises ConfigError if the group's samples have incompatible technologies that
+        map to different flye flags — those must be separated into different groups.
+        """
+        member_readsets = self.assembly_members.get(group_id, [])
+        flags = set()
+        techs = set()
+        for rs_id in member_readsets:
+            rs = self.readsets_by_id.get(rs_id)
+            tech = rs.get('lr_technology') if rs else None
+            if not tech:
+                raise ConfigError(
+                    f"Anvi'o needs to know the sequencing technology for readset '{rs_id}' "
+                    f"to run Flye, but no 'lr_technology' was found. Please set it in your "
+                    f"samples.txt. Valid values: {', '.join(sorted(LR_TECHNOLOGY_MAP.keys()))}."
+                )
+            if tech not in LR_TECHNOLOGY_MAP or 'flye' not in LR_TECHNOLOGY_MAP[tech]:
+                raise ConfigError(
+                    f"Anvi'o cannot determine the Flye read-type flag for lr_technology "
+                    f"'{tech}' (readset '{rs_id}'). Valid values: "
+                    f"{', '.join(sorted(LR_TECHNOLOGY_MAP.keys()))}."
+                )
+            flags.add(LR_TECHNOLOGY_MAP[tech]['flye'])
+            techs.add(tech)
+
+        if len(flags) > 1:
+            raise ConfigError(
+                f"Anvi'o is trying to assemble group '{group_id}' with Flye, but its "
+                f"samples use incompatible sequencing technologies: {', '.join(sorted(techs))}. "
+                f"Flye requires a single read type per assembly run. Please split these "
+                f"samples into separate groups in your samples.txt."
+            )
+        if not flags:
+            raise ConfigError(f"Group '{group_id}' has no LR readsets with a detectable flye flag.")
+
+        return flags.pop()
+
+
     def get_sr_fastqs_for_group(self, group_id: str, use_filtered: bool = False, zipped: bool | None = None):
         """
         Return {'r1': [...], 'r2': [...]} collecting all SR member readsets
@@ -721,7 +704,7 @@ class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSup
         if wildcards.group in self.references_for_removal:
             # if it's a reference for removal then we just want to use the
             # raw fasta file, and there is no need to reformat or assemble
-            contigs = self.get_input_fasta_path(wildcards)
+            contigs = self.get_input_fasta_path(wildcards, remove_gz_suffix=False)
         elif self.get_param_value_from_config(['anvi_script_reformat_fasta','run']):
             contigs = self.dirs_dict["FASTA_DIR"] + "/{group}/{group}-contigs.fa".format(group=wildcards.group)
         else:
@@ -736,50 +719,29 @@ class MetagenomicsWorkflow(ReadRecruitmentModule, ContigsDBWorkflow, WorkflowSup
         # References-mode / reference-removal path (uses fasta_information)
         if self.references_mode or wildcards.group in self.references_for_removal:
             return super(MetagenomicsWorkflow, self).get_input_fasta_path(
-                wildcards, remove_gz_suffix=remove_gz_suffix)
+                wildcards, remove_gz_suffix=False)
 
         # Assembly-mode : assembler's canonical output location
         return os.path.join(self.dirs_dict["FASTA_DIR"], wildcards.group, "final.contigs.fa")
 
 
-    def get_fastq(self, readset, pre_ref_removal=False):
+    def _resolve_sr_path(self, readset, pre_ref_removal=False):
+        """Return SR FASTQ paths with optional reference-removal logic.
+
+        When reference removal is enabled and pre_ref_removal=False, returns
+        the reference-filtered outputs. Otherwise delegates to QCModule's
+        implementation which returns QC'd or raw SR files.
         """
-        A single function that returns the fastq for either long or short reads.
-        These readset are the one passed to the mapper (and more): it will be the QCed version of the SR,
-        if QC is enable.
-        """
-        post_ref_removal = False
-        if not pre_ref_removal:
-            post_ref_removal = self.remove_short_reads_based_on_references
+        post_ref_removal = not pre_ref_removal and bool(self.remove_short_reads_based_on_references)
 
-        zipped = self.get_param_value_from_config(['gzip_fastqs', 'run']) == True
+        if post_ref_removal:
+            zipped = self.get_param_value_from_config(['gzip_fastqs', 'run']) == True
+            ext = ".fastq.gz" if zipped else ".fastq"
+            r1 = os.path.join(self.dirs_dict["QC_DIR"], f"{readset}-FILTERED_R1{ext}")
+            r2 = os.path.join(self.dirs_dict["QC_DIR"], f"{readset}-FILTERED_R2{ext}")
+            return {'r1': [r1], 'r2': [r2]}
 
-        rs = self.readsets_by_id.get(readset)
-
-        # if SR:
-        if rs['type'] == 'SR':
-            fastq_label = "-QUALITY_PASSED"
-            if post_ref_removal:
-                fastq_label = "-FILTERED"
-
-            if post_ref_removal or self.run_qc:
-                # by default, use the output of the reference based short read removal
-                if zipped:
-                    r1 = os.path.join(self.dirs_dict["QC_DIR"], readset + fastq_label + "_R1.fastq.gz")
-                    r2 = os.path.join(self.dirs_dict["QC_DIR"], readset + fastq_label + "_R2.fastq.gz")
-                else:
-                    r1 = os.path.join(self.dirs_dict["QC_DIR"], readset + fastq_label + "_R1.fastq")
-                    r2 = os.path.join(self.dirs_dict["QC_DIR"], readset + fastq_label + "_R2.fastq")
-                d = {'r1': [r1], 'r2':[r2]}
-            else:
-                # if no QC and no reference based short read removal is requested, use raw input
-                d = self.get_sr_files_for_readset(readset)
-            return d
-
-        # if LR, no QC or removal based on reference (yet)
-        if rs['type'] == 'LR':
-            d = {'lr': self.get_lr_files_for_readset(readset)}
-            return d
+        return super()._resolve_sr_path(readset, pre_ref_removal=pre_ref_removal)
 
 
     def get_readsets_for_mapping_to_group(self, group_id: str):

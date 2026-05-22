@@ -10,16 +10,26 @@ rule anvi_summarize:
             os.path.join(dirs_dict["MERGE_DIR"], "{group}", "{group}_summarize.done")
         ),
     log:
-        os.path.join(dirs_dict["LOGS_DIR"], "anvi_summarize_{group}.log"),
+        rule_log("anvi_summarize", "anvi_summarize_{group}"),
     threads: M.T("anvi_summarize")
     params:
-        contigsDB=ancient(M.get_contigs_db_path()),
-        output_dir=os.path.join(dirs_dict["MERGE_DIR"], "{group}", "SUMMARY"),
-    run:
-        shell(
-            "anvi-script-add-default-collection -c {params.contigsDB} -p {input.profileDB} >> {log} 2>&1 && "
-            "anvi-summarize -c {params.contigsDB} -p {input.profileDB} -o {params.output_dir} -C DEFAULT --light-summary --just-do-it >> {log} 2>&1"
-        )
+        contigsDB=ancient(
+            os.path.join(
+                dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "03_CONTIGS", "{group}.db"
+            )
+        ),
+        profileDB=os.path.join(
+            dirs_dict["HOME"],
+            "METAGENOMICS_WORKFLOW",
+            "06_MERGED",
+            "{group}",
+            "PROFILE.db",
+        ),
+        output_dir=os.path.join(
+            dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "07_SUMMARY", "{group}"
+        ),
+    shell:
+        "anvi-summarize -c {params.contigsDB} -p {params.profileDB} -o {params.output_dir} -C DEFAULT --init-gene-coverages --just-do-it >> {log} 2>&1"
 
 
 rule make_anvio_state_file:
@@ -33,7 +43,7 @@ rule make_anvio_state_file:
             "{group}_ECOPHYLO_WORKFLOW_state.json",
         ),
     log:
-        os.path.join(dirs_dict["LOGS_DIR"], "make_anvio_state_file_{group}.log"),
+        rule_log("make_anvio_state_file", "make_anvio_state_file_{group}"),
     threads: M.T("make_anvio_state_file")
     params:
         tax_data_final=os.path.join(
@@ -192,7 +202,7 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
             )
         ),
     log:
-        os.path.join(dirs_dict["LOGS_DIR"], "anvi_import_state_{group}.log"),
+        rule_log("anvi_import_everything_metagenome", "anvi_import_state_{group}"),
     threads: M.T("anvi_import_state")
     params:
         tax_data_final=rules.anvi_estimate_scg_taxonomy.params.tax_data_final,

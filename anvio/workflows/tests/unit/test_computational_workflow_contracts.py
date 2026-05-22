@@ -13,17 +13,11 @@ from pathlib import Path
 
 WORKFLOWS_ROOT = Path(__file__).resolve().parents[2]
 
-SNAKEMAKE_FILES = [
-    WORKFLOWS_ROOT / 'contigs' / 'Snakefile',
-    WORKFLOWS_ROOT / 'ecophylo' / 'Snakefile',
-    WORKFLOWS_ROOT / 'ecophylo' / 'rules' / 'profile_mode.smk',
-    WORKFLOWS_ROOT / 'ecophylo' / 'rules' / 'tree_mode.smk',
-    WORKFLOWS_ROOT / 'metagenomics' / 'Snakefile',
-    WORKFLOWS_ROOT / 'pangenomics' / 'Snakefile',
-    WORKFLOWS_ROOT / 'phylogenomics' / 'Snakefile',
-    WORKFLOWS_ROOT / 'sra_download' / 'Snakefile',
-    WORKFLOWS_ROOT / 'trnaseq' / 'Snakefile',
-]
+METAGENOMICS_RULE_FILES = sorted((WORKFLOWS_ROOT / 'metagenomics' / 'rules').glob('*.smk'))
+
+SNAKEMAKE_FILES = sorted(WORKFLOWS_ROOT.glob('*/Snakefile')) + sorted(
+    WORKFLOWS_ROOT.glob('*/rules/*.smk')
+)
 
 WORKFLOW_MODULES = [
     WORKFLOWS_ROOT / 'contigs' / '__init__.py',
@@ -68,13 +62,12 @@ def directive_names(rule_block):
 
 
 class ComputationalWorkflowContractTestCase(unittest.TestCase):
-    def test_rule_version_directives_are_static_when_present(self):
+    def test_rules_do_not_use_unsupported_version_directives(self):
         for path in SNAKEMAKE_FILES:
             with self.subTest(path=path.relative_to(WORKFLOWS_ROOT)):
-                versions = re.findall(r'^\s*version\s*:\s*(.+)$', read_text(path), re.MULTILINE)
-
-                for version in versions:
-                    self.assertRegex(version, r'^(1\.0|anvio\.__[A-Za-z0-9_]+__version__)(\s*#.*)?$')
+                self.assertIsNone(
+                    re.search(r'^\s*version\s*:', read_text(path), re.MULTILINE)
+                )
 
 
     def test_rules_have_declared_outputs_or_are_explicit_target_rules(self):
@@ -130,6 +123,12 @@ class ComputationalWorkflowContractTestCase(unittest.TestCase):
     def test_metagenomics_external_tool_rules_support_conda_or_existing_envs(self):
         metagenomics_module = read_text(WORKFLOWS_ROOT / 'metagenomics' / '__init__.py')
         metagenomics_snakefile = read_text(WORKFLOWS_ROOT / 'metagenomics' / 'Snakefile')
+        read_recruitment_rules = read_text(WORKFLOWS_ROOT / 'read_recruitment' / 'rules' / 'main.smk')
+        combined_rules = (
+            metagenomics_snakefile
+            + read_recruitment_rules
+            + ''.join(read_text(path) for path in METAGENOMICS_RULE_FILES)
+        )
 
         for tool in ['flye', 'minimap2', 'bowtie', 'megahit', 'metaspades', 'idba_ud']:
             with self.subTest(tool=tool):
@@ -139,9 +138,9 @@ class ComputationalWorkflowContractTestCase(unittest.TestCase):
 
         self.assertIn('def get_conda_yaml_path(workflow, tool):', read_text(WORKFLOWS_ROOT / '__init__.py'))
         self.assertIn('def get_conda_env_prefix(workflow, tool):', read_text(WORKFLOWS_ROOT / '__init__.py'))
-        self.assertIn('w.get_conda_yaml_path(M,', metagenomics_snakefile)
-        self.assertIn('w.get_conda_env_prefix(M,', metagenomics_snakefile)
-        self.assertIn('conda:', metagenomics_snakefile)
+        self.assertIn('w.get_conda_yaml_path(M,', combined_rules)
+        self.assertIn('w.get_conda_env_prefix(M,', combined_rules)
+        self.assertIn('conda:', combined_rules)
 
 
     def test_workflow_modules_define_default_max_threads_or_rule_threads(self):
