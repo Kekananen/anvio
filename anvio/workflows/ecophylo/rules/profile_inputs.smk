@@ -49,6 +49,22 @@ there are NO repeating gene-callers-id values.
         "scripts/subset_external_gene_calls_file.py"
 
 
+rule anvi_gen_contigs_database_references:
+    """Generate contigs databases for reference sequences used in read recruitment"""
+    input:
+        fasta=rules.subset_DNA_reps_with_QCd_AA_reps_for_mapping.output.NT_for_mapping,
+        external_gene_calls=rules.subset_external_gene_calls_file_all.output.external_gene_calls_subset,
+    output:
+        db=os.path.join(dirs_dict["CONTIGS_DIR"], "{group}.db"),
+    log:
+        rule_log("anvi_gen_contigs_database_references", "anvi_gen_contigs_database_references_{group}"),
+    threads: M.T("anvi_gen_contigs_database_references")
+    params:
+        skip_gene_calling="--skip-gene-calling",
+    shell:
+        "anvi-gen-contigs-database -f {input.fasta} -o {output.db} {params.skip_gene_calling} --external-gene-calls {input.external_gene_calls} -T {threads} >> {log} 2>&1"
+
+
 rule make_fasta_txt:
     """Format a fasta.txt with the filtered NT sequences for profiling in metagenomics workflow"""
     input:

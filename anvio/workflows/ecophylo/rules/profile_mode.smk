@@ -14,19 +14,13 @@ rule anvi_summarize:
     threads: M.T("anvi_summarize")
     params:
         contigsDB=ancient(
-            os.path.join(
-                dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "03_CONTIGS", "{group}.db"
-            )
+            os.path.join(dirs_dict["CONTIGS_DIR"], "{group}.db")
         ),
         profileDB=os.path.join(
-            dirs_dict["HOME"],
-            "METAGENOMICS_WORKFLOW",
-            "06_MERGED",
-            "{group}",
-            "PROFILE.db",
+            dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db",
         ),
         output_dir=os.path.join(
-            dirs_dict["HOME"], "METAGENOMICS_WORKFLOW", "07_SUMMARY", "{group}"
+            dirs_dict["MERGE_DIR"], "{group}", "SUMMARY"
         ),
     shell:
         "anvi-summarize -c {params.contigsDB} -p {params.profileDB} -o {params.output_dir} -C DEFAULT --init-gene-coverages --just-do-it >> {log} 2>&1"
