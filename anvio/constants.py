@@ -227,7 +227,7 @@ for run_type, default_config in [('single', single_default),
               f"       If you are a developer and getting this error, please make sure the file \n"
               f"       is in anvi'o distribution. If you are a user and getting this error, it \n"
               f"       something went terribly wrong with your installation :(\n")
-        sys.exit()
+        sys.exit(1)
 
 for dir in [d.strip('/').split('/')[-1] for d in glob.glob(os.path.join(clustering_configs_dir, '*/'))]:
     clustering_configs[dir] = {}
@@ -731,16 +731,3 @@ ribosomal_protein_kofams = [
 
 # anvi'o news stuff
 anvio_news_url = "https://raw.githubusercontent.com/merenlab/anvio/master/NEWS.md"
-
-
-# Maps the lr_technology column value (from samples.txt) to tool-specific presets.
-# Keys are the valid values accepted in the lr_technology column of samples-txt files.
-LR_TECHNOLOGY_MAP = {
-    'ont':          {'longqc': 'ont-ligation', 'minimap2': 'map-ont',  'flye': '--nano-raw'},
-    'ont-ligation': {'longqc': 'ont-ligation', 'minimap2': 'map-ont',  'flye': '--nano-raw'},
-    'ont-rapid':    {'longqc': 'ont-rapid',    'minimap2': 'map-ont',  'flye': '--nano-raw'},
-    'ont-1dsq':     {'longqc': 'ont-1dsq',     'minimap2': 'map-ont',  'flye': '--nano-raw'},
-    'pb-rs2':       {'longqc': 'pb-rs2',       'minimap2': 'map-pb',   'flye': '--pacbio-raw'},
-    'pb-sequel':    {'longqc': 'pb-sequel',    'minimap2': 'map-pb',   'flye': '--pacbio-raw'},
-    'pb-hifi':      {'longqc': 'pb-hifi',      'minimap2': 'map-hifi', 'flye': '--pacbio-hifi'},
-}
