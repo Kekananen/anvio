@@ -546,10 +546,8 @@ if not M.AA_mode:
         log:
             rule_log("anvi_gen_contigs_database_reps", "anvi_gen_contigs_database_reps_{group}"),
         threads: M.T("anvi_gen_contigs_database_reps")
-        params:
-            skip_gene_calling="--skip-gene-calling",
         shell:
-            "anvi-gen-contigs-database -f {input.fasta} -o {output.db} {params.skip_gene_calling} --external-gene-calls {input.gene_calls} -T {threads} >> {log} 2>&1"
+            "anvi-gen-contigs-database -f {input.fasta} -o {output.db} --external-gene-calls {input.gene_calls} -T {threads} >> {log} 2>&1"
 
     rule anvi_run_scg_taxonomy_reps:
         """Run SCG taxonomy on the representative sequences contigs database"""

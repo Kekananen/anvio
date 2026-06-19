@@ -1,3 +1,5 @@
+import re
+
 def get_hmm_threads(wildcards):
     """This function conditionally selects threads for anvi-run-hmms based on
     if a contigs-db is a metagenome or not.
@@ -131,19 +133,48 @@ rule anvi_run_hmms_hmmsearch:
                                                          --hmm-sources {hmm_source} \
                                                          --get-aa-sequences \
                                                          -o {seq_fasta} \
+                                                         --defline-format \"gene_callers_id:{{gene_callers_id}}|gene_name:{{gene_name}}|source:{{source}}|contig:{{contig_name}}\" \
                                                          --just-do-it >> {log} 2>&1")
             else:
                 seq_fasta = os.path.join(hmmer_output_dir, "existing_hits.fna")
                 shell("anvi-get-sequences-for-hmm-hits -c {contigs_db_path} \
                                                          --hmm-sources {hmm_source} \
                                                          -o {seq_fasta} \
+                                                         --defline-format \"gene_callers_id:{{gene_callers_id}}|gene_name:{{gene_name}}|source:{{source}}|contig:{{contig_name}}\" \
                                                          --just-do-it >> {log} 2>&1")
 
+            # prepend genome/sample name to each FASTA header
+            lines = []
+            with open(seq_fasta) as f:
+                for line in f:
+                    if line.startswith('>'):
+                        lines.append(f'>{wildcards.sample_name}|' + line[1:])
+                    else:
+                        lines.append(line)
+            with open(seq_fasta, 'w') as f:
+                f.writelines(lines)
+
             hmm_profile = locate_hmm_profile(hmm_source)
-            shell("{hmmer_prog} --domtblout {domtblout} \
+            shell("{hmmer_prog} --cpu {threads} \
+                                 --domtblout {domtblout} \
                                  -o /dev/null \
-                                 {hmm_profile} {seq_fasta} \
-                                 --cpu {threads} >> {log} 2>&1")
+                                 {hmm_profile} {seq_fasta} >> {log} 2>&1")
+
+            # post-process domtblout: extract integer gene_callers_id from first column
+            lines = []
+            with open(domtblout) as f:
+                for line in f:
+                    if line.startswith('#') or not line.strip():
+                        lines.append(line)
+                    else:
+                        parts = line.split(None, 1)
+                        m = re.search(r'gene_callers_id:(\d+)', parts[0])
+                        if m:
+                            lines.append(f'{m.group(1)}\t{parts[1]}')
+                        else:
+                            lines.append(line)
+            with open(domtblout, 'w') as f:
+                f.writelines(lines)
         else:
             # Run different hmm search depending on whether a hmm is internal or external
             if hmm_source in M.internal_hmm_sources:

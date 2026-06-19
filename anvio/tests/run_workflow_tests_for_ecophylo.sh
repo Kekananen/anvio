@@ -48,7 +48,8 @@ samples="sampleB_thetaiotamicron_Ribosomal_L16 sample_IGD_SUBSET_Ribosomal_L16 s
 
 for sample in $samples
 do
-    ~/github/reads-for-assembly/gen-paired-end-reads samples/$sample.ini
+    PYTHONPATH="$HOME/github/reads-for-assembly:$PYTHONPATH" \
+        ~/github/reads-for-assembly/gen-paired-end-reads samples/$sample.ini
 done
 
 echo -e "sample\tr1\tr2" > samples.txt
@@ -82,8 +83,8 @@ anvi-run-workflow -w ecophylo -c default-config.json
 INFO "Running ecophylo workflow interactive (profile-mode)"
 HMM=$(awk 'NR==2{print $2 "_" $1}' hmm_list.txt)
 echo $HMM
-anvi-interactive -c ECOPHYLO_WORKFLOW/METAGENOMICS_WORKFLOW/03_CONTIGS/${HMM}.db \
-                 -p ECOPHYLO_WORKFLOW/METAGENOMICS_WORKFLOW/06_MERGED/${HMM}/PROFILE.db \
+anvi-interactive -c ECOPHYLO_WORKFLOW/03_REFERENCE_CONTIGS/${HMM}.db \
+                 -p ECOPHYLO_WORKFLOW/11_MERGED/${HMM}/PROFILE.db \
                  $dry_run_controller
 
 rm -rf $output_dir/workflow_test/ECOPHYLO_WORKFLOW/
@@ -131,7 +132,7 @@ anvi-run-workflow -w ecophylo -c merge-by-group-config.json
 
 INFO "Running ecophylo workflow interactive (merge by group - profile mode)"
 GROUP=$(awk 'NR==2{print $4}' hmm_list_group.txt)
-anvi-interactive -c ECOPHYLO_WORKFLOW/METAGENOMICS_WORKFLOW/03_CONTIGS/${GROUP}.db \
-                 -p ECOPHYLO_WORKFLOW/METAGENOMICS_WORKFLOW/06_MERGED/${GROUP}/PROFILE.db \
+anvi-interactive -c ECOPHYLO_WORKFLOW/03_REFERENCE_CONTIGS/${GROUP}.db \
+                 -p ECOPHYLO_WORKFLOW/11_MERGED/${GROUP}/PROFILE.db \
                  $dry_run_controller
 

@@ -38,6 +38,10 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         # initialize the read recruitment module (adds bowtie_build, bowtie, etc.)
         ReadRecruitmentModule.__init__(self)
 
+        # reps contigs DB has short ribosomal protein sequences (< 600 bp).
+        # default min-contig-length of 1000 filters them all out.
+        self.default_config['anvi_profile']['--min-contig-length'] = 0
+
         # Snakemake rules
         self.rules.extend(['anvi_run_hmms_hmmsearch',
                            'anvi_run_scg_taxonomy',
@@ -242,7 +246,7 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
                 {
                     'id': s,
                     'type': 'SR',
-                    'reads': self.samples_txt.sample_d[s],
+                    'reads': self.samples_txt.get_sample(s),
                     'base_sample': s,
                 }
                 for s in self.sample_names_for_mapping_list
@@ -376,18 +380,6 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         # for samples and unique hmm_source, get the input files
         for hmm_source, hmm_name in hmm_source_name:
             input_file = [os.path.join(self.dirs_dict['EXTRACTED_RIBO_PROTEINS_DIR'], sample_name, hmm_source, hmm_name, f"{sample_name}-{hmm_name}-processed.done") for sample_name in self.names_list]
-            input_files.extend(input_file)
-
-        # you may wonder why do we need the outputs of anvi-run-scg-taxonomy here.
-        # It is for a practical reason: when a snakemake workflow is generating a lot of jobs,
-        # you can use the flag --batch my_rule=n/N to run a subset of jobs at a time. Here,
-        # by adding the output of anvi-run-scg-taxonomy as an input to this rule, you can
-        # use the --batch flag to run until 'combine_sequence_data'. Otherwise, snakemake
-        # will try to run scg taxonomy in the first batch, and basically ruining the purpose
-        # of the --batch flag.
-        # tl;dr: we make the rule 'combine_sequence_data' the bottleneck for the --batch flag
-        if self.run_scg_taxonomy:
-            input_file = [os.path.join(self.dirs_dict['EXTRACTED_RIBO_PROTEINS_DIR'], sample_name, f"{sample_name}_scg_taxonomy.done") for sample_name in self.names_list]
             input_files.extend(input_file)
 
         return input_files

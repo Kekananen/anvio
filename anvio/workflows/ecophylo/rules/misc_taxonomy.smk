@@ -140,49 +140,5 @@ rule make_misc_data:
             )
 
 
-rule anvi_run_scg_taxonomy:
-    """Run anvi-run-scg-taxonomy"""
-    input:
-        targets=expand(
-            os.path.join(
-                dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
-                "{{sample_name}}",
-                "{hmm_source}-dom-hmmsearch",
-                "contigs-hmmsearch.done",
-            ),
-            hmm_source=M.unique_hmm_source.keys(),
-        ),
-    output:
-        done=touch(
-            os.path.join(
-                dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
-                "{sample_name}",
-                "{sample_name}_scg_taxonomy.done",
-            )
-        ),
-    log:
-        rule_log("anvi_run_scg_taxonomy", "anvi_run_scg_taxonomy-{sample_name}"),
-    threads: M.T("anvi_run_scg_taxonomy")
-    params:
-        scg_taxonomy_version=M.get_param_value_from_config(
-            ["scg_taxonomy_database_version"]
-        ),
-        additional_params=M.get_param_value_from_config(
-            ["anvi_run_scg_taxonomy", "additional_params"]
-        ),
-    run:
-        # check if anvi-run-scg was already run
-        contigs_db = M.contigs_db_name_path_dict[wildcards.sample_name]
-        print(contigs_db)
-        with db.DB(contigs_db, None, ignore_version=True) as database:
-            if (
-                database.get_meta_value("scg_taxonomy_database_version")
-                != params.scg_taxonomy_version
-            ):
-                print(f"Running anvi-run-scg-taxonomy on {contigs_db}")
-                shell(
-                    "anvi-run-scg-taxonomy -c {contigs_db} --num-threads {threads} {params.additional_params} > {log} 2>&1"
-                )
-
 
 
