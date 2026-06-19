@@ -33,12 +33,6 @@
         "combine_sequence_data": {
             "threads": {"type": "int", "default": 2}
         },
-        "anvi_get_external_gene_calls_file": {
-            "threads": {"type": "int", "default": 2}
-        },
-        "cat_external_gene_calls_file": {
-            "threads": {"type": "int", "default": 2}
-        },
         "cluster_X_percent_sim_mmseqs": {
             "threads":                      {"type": "int",   "default": 5},
             "--min-seq-id":                 {"type": "float", "default": 0.97},
@@ -73,14 +67,20 @@
         "count_num_sequences_filtered": {
             "threads": {"type": "int", "default": 5}
         },
-        "subset_DNA_reps_with_QCd_AA_reps_for_mapping": {
+        "extract_QCd_sequence_headers": {
+            "threads": {"type": "int", "default": 1}
+        },
+        "build_rep_external_gene_calls": {
             "threads": {"type": "int", "default": 2}
         },
-        "subset_external_gene_calls_file_all": {
+        "anvi_gen_contigs_database_reps": {
             "threads": {"type": "int", "default": 2}
         },
-        "make_fasta_txt": {
+        "anvi_run_scg_taxonomy_reps": {
             "threads": {"type": "int", "default": 2}
+        },
+        "anvi_estimate_scg_taxonomy_reps": {
+            "threads": {"type": "int", "default": 5}
         },
         "fasttree": {
             "threads": {"type": "int",  "default": 5},
@@ -91,18 +91,6 @@
             "run":               {"type": "bool", "default": false},
             "-m":                {"type": "str",  "default": "MFP"},
             "additional_params": {"type": "str",  "default": null}
-        },
-        "make_metagenomics_config_file": {
-            "threads": {"type": "int", "default": 1}
-        },
-        "run_metagenomics_workflow": {
-            "threads":                    {"type": "int",  "default": 2},
-            "clusterize":                 {"type": "bool", "default": false},
-            "clusterize_submission_params":{"type": "str", "default": null},
-            "HPC_string":                 {"type": "str",  "default": null},
-            "snakemake_additional_params":{"type": "str",  "default": null},
-            "bowtie2_additional_params":  {"type": "str",  "default": null},
-            "anvi_profile_min_percent_identity":{"type": "float", "default": null}
         },
         "add_default_collection": {
             "threads": {"type": "int", "default": 2}
@@ -127,9 +115,6 @@
         },
         "anvi_import_state": {
             "threads": {"type": "int", "default": 1}
-        },
-        "anvi_import_everything": {
-            "threads": {"type": "int", "default": 2}
         }
     }
 }

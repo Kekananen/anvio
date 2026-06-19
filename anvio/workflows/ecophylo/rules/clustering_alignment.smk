@@ -364,6 +364,7 @@ rule remove_sequences_with_X_percent_gaps:
         fasta=os.path.join(
             dirs_dict["MSA"], "{group}", "{group}_aligned_trimmed_filtered.fa"
         ),
+        seq_counts_tsv=os.path.join(dirs_dict["MSA"], "{group}", "{group}_gaps_counts"),
     log:
         rule_log(
             "remove_sequences_with_X_percent_gaps",
@@ -371,14 +372,24 @@ rule remove_sequences_with_X_percent_gaps:
         ),
     threads: M.T("remove_sequences_with_X_percent_gaps")
     params:
-        seq_counts_tsv=os.path.join(dirs_dict["MSA"], "{group}", "{group}_gaps_counts"),
         max_percentage_gaps=M.get_param_value_from_config(
             ["remove_sequences_with_X_percent_gaps", "--max-percentage-gaps"]
         ),
     shell:
         "anvi-script-reformat-fasta {input} -o {output.fasta} \
                                       --max-percentage-gaps {params.max_percentage_gaps} \
-                                      --export-gap-counts-table {params.seq_counts_tsv} >> {log} 2>&1"
+                                      --export-gap-counts-table {output.seq_counts_tsv} >> {log} 2>&1"
+
+
+rule extract_QCd_sequence_headers:
+    """Extract headers from QCd sequences for misc data generation"""
+    input:
+        fasta=rules.remove_sequences_with_X_percent_gaps.output.fasta,
+    output:
+        headers=os.path.join(dirs_dict["MSA"], "{group}", "{group}_headers.tmp"),
+    threads: M.T("extract_QCd_sequence_headers")
+    shell:
+        "grep '^>' {input.fasta} | sed 's/>//g' > {output.headers}"
 
 
 rule count_num_sequences_filtered:
@@ -466,3 +477,130 @@ rule count_num_sequences_filtered:
             ] + clustering_threshold_attributes_list
             for line in lines:
                 f.write("\t".join(line) + "\n")
+
+
+if not M.AA_mode:
+
+    rule build_rep_external_gene_calls:
+        """Build external gene calls TSV from NT and AA representative sequences"""
+        input:
+            nt_reps=rules.cluster_X_percent_sim_mmseqs.output.fasta,
+            aa_reps=os.path.join(
+                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                "{group}",
+                "{group}-AA_subset.fa",
+            ),
+        output:
+            gene_calls=os.path.join(
+                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                "{group}",
+                "{group}-rep-gene-calls.tsv",
+            ),
+        log:
+            rule_log("build_rep_external_gene_calls", "build_rep_external_gene_calls_{group}"),
+        threads: M.T("build_rep_external_gene_calls")
+        run:
+            from Bio import SeqIO
+
+            nt_index = SeqIO.index(input.nt_reps, "fasta")
+            aa_index = SeqIO.index(input.aa_reps, "fasta")
+
+            records = []
+            for i, header in enumerate(nt_index, start=1):
+                nt_seq = nt_index[header]
+                aa_seq = str(aa_index[header].seq)
+                records.append({
+                    'gene_callers_id': i,
+                    'contig': header,
+                    'start': 1,
+                    'stop': len(nt_seq.seq),
+                    'direction': 'f',
+                    'partial': 0,
+                    'call_type': 1,
+                    'source': 'EcoPhylo',
+                    'version': anvio.__version__,
+                    'aa_sequence': aa_seq,
+                })
+
+            nt_index.close()
+            aa_index.close()
+
+            pd.DataFrame(records).to_csv(output.gene_calls, sep="\t", index=False)
+
+    # NOTE: The reps contigs DB is built BEFORE the alignment/trimming/gap-filtering
+    # steps. This means the DB contains ALL cluster representatives, even those that
+    # may later be removed due to excessive gaps in the MSA. The interactive interface
+    # will display all representatives from the contigs DB, not just those that
+    # survived the gap filter. If this causes issues (e.g., tree tips with no
+    # corresponding entries), check how the interactive interface handles the
+    # mismatch and consider either (a) building the DB post-QC, or (b) filtering
+    # the DB entries to match the final tree.
+
+    rule anvi_gen_contigs_database_reps:
+        """Generate contigs database from representative NT sequences"""
+        input:
+            fasta=rules.cluster_X_percent_sim_mmseqs.output.fasta,
+            gene_calls=rules.build_rep_external_gene_calls.output.gene_calls,
+        output:
+            db=os.path.join(dirs_dict["CONTIGS_DIR"], "{group}.db"),
+        log:
+            rule_log("anvi_gen_contigs_database_reps", "anvi_gen_contigs_database_reps_{group}"),
+        threads: M.T("anvi_gen_contigs_database_reps")
+        params:
+            skip_gene_calling="--skip-gene-calling",
+        shell:
+            "anvi-gen-contigs-database -f {input.fasta} -o {output.db} {params.skip_gene_calling} --external-gene-calls {input.gene_calls} -T {threads} >> {log} 2>&1"
+
+    rule anvi_run_scg_taxonomy_reps:
+        """Run SCG taxonomy on the representative sequences contigs database"""
+        input:
+            db=rules.anvi_gen_contigs_database_reps.output.db,
+        output:
+            done=touch(os.path.join(dirs_dict["CONTIGS_DIR"], "{group}", "scg_taxonomy.done")),
+        log:
+            rule_log("anvi_run_scg_taxonomy_reps", "anvi_run_scg_taxonomy_reps_{group}"),
+        threads: M.T("anvi_run_scg_taxonomy")
+        params:
+            additional_params=M.get_param_value_from_config(["anvi_run_scg_taxonomy", "additional_params"]),
+        shell:
+            "anvi-run-scg-taxonomy -c {input.db} --num-threads {threads} {params.additional_params} >> {log} 2>&1"
+
+    rule anvi_estimate_scg_taxonomy_reps:
+        """Export SCG taxonomy for each representative from the reps contigs DB"""
+        input:
+            db=rules.anvi_run_scg_taxonomy_reps.output.done,
+        output:
+            done=touch(os.path.join(dirs_dict["MISC_DATA"], "{group}", "anvi_estimate_scg_taxonomy_for_SCGs.done")),
+            tax_data_final=os.path.join(dirs_dict["MISC_DATA"], "{group}", "{group}_scg_taxonomy_data.tsv"),
+        log:
+            rule_log("anvi_estimate_scg_taxonomy_reps", "anvi_scg_taxonomy_reps_{group}"),
+        threads: M.T("anvi_estimate_scg_taxonomy")
+        params:
+            per_scg=os.path.join(dirs_dict["MISC_DATA"], "{group}", "{group}_per_scg.txt"),
+        run:
+            # Get the HMM name for this group
+            hmm_name = ""
+            for hmm, value in M.hmm_dict.items():
+                if value["group"] == wildcards.group:
+                    hmm_name = value["name"]
+
+            reps_db = os.path.join(dirs_dict["CONTIGS_DIR"], f"{wildcards.group}.db")
+
+            shell("anvi-estimate-scg-taxonomy -c {reps_db} \
+                                               --metagenome-mode \
+                                               --scg-name-for-metagenome-mode {hmm_name} \
+                                               --per-scg-output-file {params.per_scg} \
+                                               -o /dev/null \
+                                               -T {threads} >> {log} 2>&1")
+
+            scg_taxonomy = pd.read_csv(params.per_scg, sep="\t", index_col=False)
+
+            scg_taxonomy["split_name"] = scg_taxonomy["bin_name"].astype(str) + "_split_00001"
+            scg_taxonomy = scg_taxonomy.rename(columns={"bin_name": "identifier"})
+
+            expected_columns = ["split_name", "identifier", "percent_identity",
+                                "t_domain", "t_phylum", "t_class", "t_order",
+                                "t_family", "t_genus", "t_species"]
+            available_columns = [c for c in expected_columns if c in scg_taxonomy.columns]
+            scg_taxonomy = scg_taxonomy[available_columns]
+            scg_taxonomy.to_csv(output.tax_data_final, sep="\t", index=None, na_rep="NA")

@@ -199,7 +199,7 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
         rule_log("anvi_import_everything_metagenome", "anvi_import_state_{group}"),
     threads: M.T("anvi_import_state")
     params:
-        tax_data_final=rules.anvi_estimate_scg_taxonomy.params.tax_data_final,
+        tax_data_final=rules.anvi_estimate_scg_taxonomy_reps.output.tax_data_final,
         profileDB=os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db"),
         tree_profileDB=os.path.join(dirs_dict["TREES"], "{group}", "{group}-PROFILE.db"),
         misc_data=rules.make_misc_data.output.misc_data_final,

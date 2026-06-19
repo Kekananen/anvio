@@ -50,7 +50,6 @@ rule ECOPHYLO_WORKFLOW_target_rule:
 include: w.get_workflow_rule_file_path("ecophylo", "hmm_processing.smk")
 include: w.get_workflow_rule_file_path("ecophylo", "sequence_data.smk")
 include: w.get_workflow_rule_file_path("ecophylo", "clustering_alignment.smk")
-include: w.get_workflow_rule_file_path("ecophylo", "profile_inputs.smk")
 include: w.get_workflow_rule_file_path("ecophylo", "tree_building.smk")
 include: w.get_workflow_rule_file_path("ecophylo", "misc_taxonomy.smk")
 

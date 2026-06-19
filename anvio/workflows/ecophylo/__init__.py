@@ -44,8 +44,7 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
                            'filter_hmm_hits_by_model_coverage',
                            'process_hmm_hits',
                            'combine_sequence_data',
-                           'anvi_get_external_gene_calls_file',
-                           'cat_external_gene_calls_file',
+
                            'cluster_X_percent_sim_mmseqs',
                            'anvi_profile_blitz',
                            'subset_AA_seqs_with_mmseqs_reps',
@@ -53,21 +52,21 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
                            'align_sequences',
                            'trim_alignment',
                            'remove_sequences_with_X_percent_gaps',
-                           'count_num_sequences_filtered',
-                            'subset_DNA_reps_with_QCd_AA_reps_for_mapping',
-                            'subset_external_gene_calls_file_all',
-                            'anvi_gen_contigs_database_references',
+                            'count_num_sequences_filtered',
                             'fasttree',
                             'iqtree',
                             'anvi_summarize',
                             'rename_tree_tips',
                            'make_misc_data',
                            'add_misc_data_to_taxonomy',
-                           'anvi_estimate_scg_taxonomy',
                            'make_anvio_state_file',
-                           'anvi_import_state',
-                           'anvi_import_everything'
-                           ])
+                            'anvi_import_state',
+                            'extract_QCd_sequence_headers',
+                            'build_rep_external_gene_calls',
+                            'anvi_gen_contigs_database_reps',
+                            'anvi_run_scg_taxonomy_reps',
+                            'anvi_estimate_scg_taxonomy_reps'
+                            ])
 
 
         # Directory structure for Snakemake workflow
@@ -260,12 +259,12 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
                 'path': os.path.join(
                     self.dirs_dict['RIBOSOMAL_PROTEIN_FASTAS'],
                     group,
-                    f"{group}-references_for_mapping_NT.fa",
+                    f"{group}-mmseqs_NR_rep_seq.fasta",
                 ),
                 'external_gene_calls': os.path.join(
                     self.dirs_dict['RIBOSOMAL_PROTEIN_FASTAS'],
                     group,
-                    f"{group}-external_gene_calls_subset.tsv",
+                    f"{group}-rep-gene-calls.tsv",
                 ),
             }
 
@@ -492,10 +491,5 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
             if value['group'] not in unique_group:
                 unique_group.append(value['group'])
 
-        # if groups combine two or more hmm, then anvi-scg-taxonomy is not compatible with the workflow
-        # TODO: I hope we can change that in the future, probably by making a contigs.db for the representative sequence,
-        # in tree mode or not.
-        if len(unique_group) < len(self.hmm_dict) and self.run_scg_taxonomy:
-            raise ConfigError("You have one or more 'group' in your HMM list file (or multiple identical entries - but you "
-                              "shouldn't be doing that) and at the moment it is not compatible with anvi-estimate-scg-taxonomy. "
-                              "The good news is that you can turn off anvi-run-scg-taxonmy in your config file.")
+        # Since we now build a reps contigs DB per group (see clustering_alignment.smk), SCG taxonomy
+        # works even when groups combine two or more HMMs. The restriction is lifted.

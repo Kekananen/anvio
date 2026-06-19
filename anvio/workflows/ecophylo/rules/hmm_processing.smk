@@ -42,6 +42,34 @@ def get_hmm_threads(wildcards):
         return 1
 
 
+def locate_hmm_profile(hmm_source):
+    """Return path to the .hmm file for a given HMM source."""
+    if hmm_source in M.internal_hmm_sources:
+        import anvio.data.hmm
+        return anvio.data.hmm.sources[hmm_source]['model']
+    else:
+        return os.path.join(M.unique_hmm_source[hmm_source], 'genes.hmm.gz')
+
+
+def get_hmm_target(hmm_source):
+    """Return target string (e.g. 'AA:GENE', 'RNA:CONTIG') for a given HMM source."""
+    if hmm_source in M.internal_hmm_sources:
+        import anvio.data.hmm
+        return anvio.data.hmm.sources[hmm_source]['target']
+    else:
+        target_path = os.path.join(M.unique_hmm_source[hmm_source], 'target.txt')
+        with open(target_path) as f:
+            return f.read().strip()
+
+
+def is_hmm_source_in_contigs_db(contigs_db_path, hmm_source):
+    """Check if an HMM source already exists in a contigs database."""
+    database = db.DB(contigs_db_path, None, ignore_version=True)
+    hmm_sources = database.get_table_as_dict('hmm_hits_info')
+    database.disconnect()
+    return hmm_source in hmm_sources
+
+
 rule anvi_run_hmms_hmmsearch:
     """Run hmmsearch with input hmms to get domtblout"""
     output:
@@ -85,27 +113,60 @@ rule anvi_run_hmms_hmmsearch:
             f"{hmm_source}-dom-hmmsearch",
             "hmm.domtable",
         )
-        # Run different hmm search depending on whether a hmm is internal or external because anvio
-        if hmm_source in M.internal_hmm_sources:
-            if not os.path.exists(domtblout):
-                print(f"Running internal hmm dataset: {hmm_source}")
-                shell("anvi-run-hmms -c {contigs_db_path} \
-                                     --hmmer-program hmmsearch \
-                                     --hmmer-output-dir {hmmer_output_dir} \
-                                     --installed-hmm-profile {hmm_source} \
-                                     --domain-hits-table \
-                                     --just-do-it \
-                                     -T {threads} >> {log} 2>&1")
+
+        if is_hmm_source_in_contigs_db(contigs_db_path, hmm_source):
+            # HMM source already exists in the contigs DB. Instead of running
+            # the full anvi-run-hmms (which searches all genes), we extract
+            # only the sequences that already matched and run a targeted
+            # hmmsearch to produce the domain table needed for filtering.
+            os.makedirs(hmmer_output_dir, exist_ok=True)
+
+            target = get_hmm_target(hmm_source)
+            alphabet = target.split(':')[0]
+            hmmer_prog = "nhmmscan" if alphabet in ('RNA', 'DNA') else "hmmsearch"
+
+            if alphabet == 'AA':
+                seq_fasta = os.path.join(hmmer_output_dir, "existing_hits.faa")
+                shell("anvi-get-sequences-for-hmm-hits -c {contigs_db_path} \
+                                                         --hmm-sources {hmm_source} \
+                                                         --get-aa-sequences \
+                                                         -o {seq_fasta} \
+                                                         --just-do-it >> {log} 2>&1")
+            else:
+                seq_fasta = os.path.join(hmmer_output_dir, "existing_hits.fna")
+                shell("anvi-get-sequences-for-hmm-hits -c {contigs_db_path} \
+                                                         --hmm-sources {hmm_source} \
+                                                         -o {seq_fasta} \
+                                                         --just-do-it >> {log} 2>&1")
+
+            hmm_profile = locate_hmm_profile(hmm_source)
+            shell("{hmmer_prog} --domtblout {domtblout} \
+                                 -o /dev/null \
+                                 {hmm_profile} {seq_fasta} \
+                                 --cpu {threads} >> {log} 2>&1")
         else:
-            if not os.path.exists(domtblout):
-                print(f"Running external hmm dataset: {hmm_source}")
-                shell("anvi-run-hmms -c {contigs_db_path} \
-                                     --hmmer-program hmmsearch \
-                                     --hmm-profile-dir {hmm_dir} \
-                                     --hmmer-output-dir {hmmer_output_dir} \
-                                     --domain-hits-table \
-                                     --just-do-it \
-                                     -T {threads} >> {log} 2>&1")
+            # Run different hmm search depending on whether a hmm is internal or external
+            if hmm_source in M.internal_hmm_sources:
+                if not os.path.exists(domtblout):
+                    print(f"Running internal hmm dataset: {hmm_source}")
+                    shell("anvi-run-hmms -c {contigs_db_path} \
+                                         --hmmer-program hmmsearch \
+                                         --hmmer-output-dir {hmmer_output_dir} \
+                                         --installed-hmm-profile {hmm_source} \
+                                         --domain-hits-table \
+                                         --just-do-it \
+                                         -T {threads} >> {log} 2>&1")
+            else:
+                if not os.path.exists(domtblout):
+                    print(f"Running external hmm dataset: {hmm_source}")
+                    shell("anvi-run-hmms -c {contigs_db_path} \
+                                         --hmmer-program hmmsearch \
+                                         --hmm-profile-dir {hmm_dir} \
+                                         --hmmer-output-dir {hmmer_output_dir} \
+                                         --domain-hits-table \
+                                         --just-do-it \
+                                         -T {threads} >> {log} 2>&1")
+
         # Get hmm_hits.txt
         get_hmm_hits_txt(contigs_db_path, output.hmm_hits)
         shell("touch {output.done}")
@@ -284,23 +345,17 @@ names with reformated names.
             f"{wildcards.sample_name}-{wildcards.hmm_name}-hmm_hits.fna",
         )
         # anvi-script-reformat-fasta output files
-        fasta_NT = (
-            os.path.join(
-                fasta_output_dir,
-                f"{wildcards.sample_name}-{wildcards.hmm_name}-hmm_hits_renamed.fna",
-            ),
+        fasta_NT = os.path.join(
+            fasta_output_dir,
+            f"{wildcards.sample_name}-{wildcards.hmm_name}-hmm_hits_renamed.fna",
         )
-        fasta_AA = (
-            os.path.join(
-                fasta_output_dir,
-                f"{wildcards.sample_name}-{wildcards.hmm_name}-hmm_hits_renamed.faa",
-            ),
+        fasta_AA = os.path.join(
+            fasta_output_dir,
+            f"{wildcards.sample_name}-{wildcards.hmm_name}-hmm_hits_renamed.faa",
         )
-        report_file_NT = (
-            os.path.join(
-                fasta_output_dir,
-                f"{wildcards.sample_name}-{wildcards.hmm_name}-reformat_report_nt.txt",
-            ),
+        report_file_NT = os.path.join(
+            fasta_output_dir,
+            f"{wildcards.sample_name}-{wildcards.hmm_name}-reformat_report_nt.txt",
         )
         report_file_AA = os.path.join(
             fasta_output_dir,

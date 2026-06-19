@@ -134,7 +134,7 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
     threads: M.T("anvi_import_state")
     params:
         misc_data=rules.make_misc_data.output.misc_data_final,
-        tax_data_final=rules.anvi_estimate_scg_taxonomy.params.tax_data_final,
+        tax_data_final=rules.anvi_estimate_scg_taxonomy_reps.output.tax_data_final,
         tree_profileDB=os.path.join(dirs_dict["TREES"], "{group}", "{group}-PROFILE.db"),
     run:
         # Make place holder profileDB for tree
