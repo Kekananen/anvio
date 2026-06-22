@@ -1,10 +1,27 @@
 # profile-mode with read recruitment
 
 
+rule anvi_add_default_collection:
+    """Add DEFAULT collection to the merged profile for anvi-summarize"""
+    input:
+        profileDB=ancient(os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db")),
+    output:
+        done=touch(
+            os.path.join(dirs_dict["MERGE_DIR"], "{group}", "{group}_default_collection.done")
+        ),
+    log:
+        rule_log("anvi_add_default_collection", "anvi_add_default_collection_{group}"),
+    params:
+        profileDB=os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db"),
+    shell:
+        "anvi-script-add-default-collection -p {params.profileDB} >> {log} 2>&1"
+
+
 rule anvi_summarize:
     """Summarize merged profile for hmm_hits"""
     input:
         profileDB=ancient(os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db")),
+        default_collection=rules.anvi_add_default_collection.output.done,
     output:
         done=touch(
             os.path.join(dirs_dict["MERGE_DIR"], "{group}", "{group}_summarize.done")

@@ -364,7 +364,7 @@ rule remove_sequences_with_X_percent_gaps:
         fasta=os.path.join(
             dirs_dict["MSA"], "{group}", "{group}_aligned_trimmed_filtered.fa"
         ),
-        seq_counts_tsv=os.path.join(dirs_dict["MSA"], "{group}", "{group}_gaps_counts"),
+        seq_counts_tsv=os.path.join(dirs_dict["MSA"], "{group}", "{group}_gaps_counts.tsv"),
     log:
         rule_log(
             "remove_sequences_with_X_percent_gaps",
@@ -375,10 +375,13 @@ rule remove_sequences_with_X_percent_gaps:
         max_percentage_gaps=M.get_param_value_from_config(
             ["remove_sequences_with_X_percent_gaps", "--max-percentage-gaps"]
         ),
+        gap_counts_prefix=lambda wildcards: os.path.join(
+            dirs_dict["MSA"], wildcards.group, f"{wildcards.group}_gaps_counts"
+        ),
     shell:
         "anvi-script-reformat-fasta {input} -o {output.fasta} \
                                       --max-percentage-gaps {params.max_percentage_gaps} \
-                                      --export-gap-counts-table {output.seq_counts_tsv} >> {log} 2>&1"
+                                       --export-gap-counts-table {params.gap_counts_prefix} >> {log} 2>&1"
 
 
 rule extract_QCd_sequence_headers:
@@ -430,10 +433,10 @@ rule count_num_sequences_filtered:
 
             num_seqs = 0
 
-        for line in fasta:
-            if line.startswith(">"):
-                num_seqs += 1
-        return num_seqs
+            for line in fasta:
+                if line.startswith(">"):
+                    num_seqs += 1
+            return num_seqs
         input_files_list = [
             params.combined_seq,
             params.cluster_mmseqs,
@@ -561,7 +564,8 @@ if not M.AA_mode:
         params:
             additional_params=M.get_param_value_from_config(["anvi_run_scg_taxonomy", "additional_params"]),
         shell:
-            "anvi-run-scg-taxonomy -c {input.db} --num-threads {threads} {params.additional_params} >> {log} 2>&1"
+            "anvi-run-hmms -c {input.db} --num-threads {threads} >> {log} 2>&1 && \
+             anvi-run-scg-taxonomy -c {input.db} --num-threads {threads} {params.additional_params} >> {log} 2>&1"
 
     rule anvi_estimate_scg_taxonomy_reps:
         """Export SCG taxonomy for each representative from the reps contigs DB"""
@@ -573,28 +577,21 @@ if not M.AA_mode:
         log:
             rule_log("anvi_estimate_scg_taxonomy_reps", "anvi_scg_taxonomy_reps_{group}"),
         threads: M.T("anvi_estimate_scg_taxonomy")
-        params:
-            per_scg=os.path.join(dirs_dict["MISC_DATA"], "{group}", "{group}_per_scg.txt"),
         run:
-            # Get the HMM name for this group
-            hmm_name = ""
-            for hmm, value in M.hmm_dict.items():
-                if value["group"] == wildcards.group:
-                    hmm_name = value["name"]
-
             reps_db = os.path.join(dirs_dict["CONTIGS_DIR"], f"{wildcards.group}.db")
 
-            shell("anvi-estimate-scg-taxonomy -c {reps_db} \
-                                               --metagenome-mode \
-                                               --scg-name-for-metagenome-mode {hmm_name} \
-                                               --per-scg-output-file {params.per_scg} \
-                                               -o /dev/null \
-                                               -T {threads} >> {log} 2>&1")
+            # Read SCG taxonomy directly from the contigs DB (populated by anvi-run-scg-taxonomy)
+            anvio_db = db.DB(reps_db, None, ignore_version=True)
 
-            scg_taxonomy = pd.read_csv(params.per_scg, sep="\t", index_col=False)
+            scg_taxonomy_dict = anvio_db.get_table_as_dict('scg_taxonomy')
+            scg_taxonomy = pd.DataFrame.from_dict(scg_taxonomy_dict, orient='index')
 
-            scg_taxonomy["split_name"] = scg_taxonomy["bin_name"].astype(str) + "_split_00001"
-            scg_taxonomy = scg_taxonomy.rename(columns={"bin_name": "identifier"})
+            genes_dict = anvio_db.get_table_as_dict('genes_in_contigs')
+            gene_to_contig = {gcid: row['contig'] for gcid, row in genes_dict.items()}
+            scg_taxonomy['split_name'] = scg_taxonomy.index.map(
+                lambda gcid: f"{gene_to_contig[gcid]}_split_00001"
+            )
+            scg_taxonomy['identifier'] = scg_taxonomy.index.astype(str)
 
             expected_columns = ["split_name", "identifier", "percent_identity",
                                 "t_domain", "t_phylum", "t_class", "t_order",

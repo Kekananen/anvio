@@ -27,6 +27,11 @@ __email__ = "mschechter@uchicago.edu"
 
 
 M = EcoPhyloWorkflow(argparse.Namespace(config=config))
+
+# Ensure min-contig-length is 0 for reps profiling: the reps contigs DB is tiny
+# (6 contigs, 420-549 bp) and the default threshold of 1000 would filter all out.
+M.config.setdefault('anvi_profile', {})['--min-contig-length'] = 0
+
 M.init()
 
 dirs_dict = M.dirs_dict
