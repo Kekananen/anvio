@@ -43,9 +43,11 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         self.default_config['anvi_profile']['--min-contig-length'] = 0
 
         # Snakemake rules
-        self.rules.extend(['anvi_run_hmms_hmmsearch',
+        self.rules.extend(['extract_hmm_hit_seqs',
                            'anvi_run_scg_taxonomy',
-                           'filter_hmm_hits_by_model_coverage',
+                           'cat_hmm_hit_seqs',
+                           'hmmsearch_combined',
+                           'filter_hmm_hits_combined',
                            'process_hmm_hits',
                            'combine_sequence_data',
 
@@ -73,27 +75,28 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
                             ])
 
 
-        # (dirs_dict is now set entirely in init() to avoid duplication)
-
-
     def init(self):
         """This function is called from within the Snakefile to initialize parameters."""
 
+        # Remove inherited keys from parent modules so we control insertion order
+        # in 00-07 sequence for get_default_config().
+        for k in ["QC_DIR", "MAPPING_DIR", "PROFILE_DIR", "MERGE_DIR"]:
+            self.dirs_dict.pop(k, None)
+
+        # Set all 8 canonical keys in 00-07 order
+        self.dirs_dict["LOGS_DIR"] = "00_LOGS"
+        self.dirs_dict["HMM_HITS_DIR"] = "01_HMM_HITS"
+        self.dirs_dict["REPRESENTATIVES_DIR"] = "02_REPRESENTATIVES"
+        self.dirs_dict["CONTIGS_DIR"] = "03_CONTIGS"
+        self.dirs_dict["PHYLO"] = "04_TREE"
+        self.dirs_dict["MAPPING_DIR"] = "05_MAPPING"
+        self.dirs_dict["PROFILE_DIR"] = "06_ANVIO_PROFILE"
+        self.dirs_dict["MERGE_DIR"] = "07_RESULTS"
+
         super().init()
-        # Override base-class dirs_dict with EcoPhylo workflow directory structure.
-        # All paths are relative to the user-specified output directory (no HOME wrapper).
-        self.dirs_dict.update({"LOGS_DIR": "00_LOGS"})
-        self.dirs_dict.update({"HMM_HITS_DIR": "01_HMM_HITS"})
-        self.dirs_dict.update({"COMBINED_DIR": "01_HMM_HITS"})
-        self.dirs_dict.update({"REPRESENTATIVES_DIR": "02_REPRESENTATIVES"})
-        self.dirs_dict.update({"CONTIGS_DIR": "03_CONTIGS"})
-        self.dirs_dict.update({"MSA": "04_TREE"})
-        self.dirs_dict.update({"TREES": "04_TREE"})
-        self.dirs_dict.update({"MAPPING_DIR": "05_MAPPING"})
-        self.dirs_dict.update({"QC_DIR": "05_MAPPING"})
-        self.dirs_dict.update({"PROFILE_DIR": "06_ANVIO_PROFILE"})
-        self.dirs_dict.update({"MISC_DATA": "06_ANVIO_PROFILE"})
-        self.dirs_dict.update({"MERGE_DIR": "07_RESULTS"})
+        # QC_DIR is inherited from ReadRecruitmentModule but kept at runtime.
+        # It is excluded from the default config via get_default_config() override.
+        self.dirs_dict["QC_DIR"] = "05_MAPPING"
 
         # Make log directories
         if not os.path.exists(self.dirs_dict['LOGS_DIR']):
@@ -285,6 +288,12 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         # global target files
         self.target_files = self.get_target_files()
 
+    def get_default_config(self):
+        """Return default config with output_dirs limited to our 8 canonical keys."""
+        c = super().get_default_config()
+        c["output_dirs"].pop("QC_DIR", None)
+        return c
+
     def get_target_files(self):
         """This function creates a list of target files for Snakemake
 
@@ -328,11 +337,11 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
 
         target_files = []
 
-        target_file = os.path.join(self.dirs_dict['MISC_DATA'], "{group}", "{group}_misc.tsv")
+        target_file = os.path.join(self.dirs_dict['PROFILE_DIR'], "{group}", "{group}_misc.tsv")
         target_files.append(target_file)
 
         if self.run_scg_taxonomy and not self.AA_mode:
-            target_file = os.path.join(self.dirs_dict['MISC_DATA'], "{group}", "anvi_estimate_scg_taxonomy_for_SCGs.done")
+            target_file = os.path.join(self.dirs_dict['PROFILE_DIR'], "{group}", "anvi_estimate_scg_taxonomy_for_SCGs.done")
             target_files.append(target_file)
 
         return target_files

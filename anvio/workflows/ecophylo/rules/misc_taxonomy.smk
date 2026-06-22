@@ -108,7 +108,7 @@ rule make_misc_data:
         final_list_of_sequences_for_mapping_headers=rules.extract_QCd_sequence_headers.output.headers,
     output:
         misc_data_final=os.path.join(
-            dirs_dict["MISC_DATA"], "{group}", "{group}_misc.tsv"
+            dirs_dict["PROFILE_DIR"], "{group}", "{group}_misc.tsv"
         ),
     log:
         rule_log("make_misc_data", "add_contigs_db_type_{group}"),

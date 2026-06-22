@@ -5,17 +5,17 @@ rule make_anvio_state_file_tree:
         source=M.get_target_files_make_anvio_state_file(),
     output:
         state_file=os.path.join(
-            dirs_dict["MISC_DATA"], "{group}", "{group}_TREE_state.json"
+            dirs_dict["PROFILE_DIR"], "{group}", "{group}_TREE_state.json"
         ),
     log:
         rule_log("make_anvio_state_file_tree", "make_anvio_state_file_{group}"),
     threads: M.T("make_anvio_state_file")
     params:
         tax_data_final=os.path.join(
-            dirs_dict["MISC_DATA"], "{group}", "{group}_scg_taxonomy_data.tsv"
+            dirs_dict["PROFILE_DIR"], "{group}", "{group}_scg_taxonomy_data.tsv"
         ),
         misc_data_final=os.path.join(
-            dirs_dict["MISC_DATA"], "{group}", "{group}_misc.tsv"
+            dirs_dict["PROFILE_DIR"], "{group}", "{group}_misc.tsv"
         ),
     run:
         # Read in misc data headers for layer_order
@@ -127,15 +127,15 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
         state=rules.make_anvio_state_file_tree.output.state_file,
     output:
         done=touch(
-            os.path.join(dirs_dict["TREES"], "{group}", "state_imported_tree.done")
+            os.path.join(dirs_dict["PHYLO"], "{group}", "state_imported_tree.done")
         ),
     log:
         rule_log("anvi_import_everything_tree", "anvi_import_state_{group}"),
     threads: M.T("anvi_import_state")
     params:
         misc_data=rules.make_misc_data.output.misc_data_final,
-        tax_data_final=os.path.join(dirs_dict["MISC_DATA"], "{group}", "{group}_scg_taxonomy_data.tsv"),
-        tree_profileDB=os.path.join(dirs_dict["TREES"], "{group}", "{group}-PROFILE.db"),
+        tax_data_final=os.path.join(dirs_dict["PROFILE_DIR"], "{group}", "{group}_scg_taxonomy_data.tsv"),
+        tree_profileDB=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}-PROFILE.db"),
     run:
         # Make place holder profileDB for tree
         import anvio

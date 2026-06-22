@@ -5,13 +5,13 @@ if M.run_iqtree == True:
         input:
             fasta=rules.remove_sequences_with_X_percent_gaps.output.fasta,
         output:
-            tree=os.path.join(dirs_dict["TREES"], "{group}", "{group}.iqtree"),
-            done=touch(os.path.join(dirs_dict["TREES"], "{group}", "{group}-tree.done")),
+            tree=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}.iqtree"),
+            done=touch(os.path.join(dirs_dict["PHYLO"], "{group}", "{group}-tree.done")),
         log:
             rule_log("iqtree", "iqtree_{group}"),
         threads: M.T("iqtree")
         params:
-            outfile=os.path.join(dirs_dict["TREES"], "{group}"),
+            outfile=os.path.join(dirs_dict["PHYLO"], "{group}"),
             model=M.get_param_value_from_config(["iqtree", "-m"]),
             additional_params=M.get_param_value_from_config(
                 ["iqtree", "additional_params"]
@@ -26,8 +26,8 @@ elif M.run_fasttree == True:
         input:
             fasta=rules.remove_sequences_with_X_percent_gaps.output.fasta,
         output:
-            tree=os.path.join(dirs_dict["TREES"], "{group}", "{group}.nwk"),
-            done=touch(os.path.join(dirs_dict["TREES"], "{group}", "{group}-tree.done")),
+            tree=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}.nwk"),
+            done=touch(os.path.join(dirs_dict["PHYLO"], "{group}", "{group}-tree.done")),
         log:
             rule_log("fasttree", "fasttree_{group}"),
         threads: M.T("fasttree")
@@ -35,7 +35,7 @@ elif M.run_fasttree == True:
             additional_params=M.get_param_value_from_config(
                 ["fasttree", "additional_params"]
             ),
-            tree=os.path.join(dirs_dict["TREES"], "{group}", "{group}.nwk"),
+            tree=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}.nwk"),
         shell:
             "FastTree -fastest {input} 2> {log} 1> {params.tree}"
 
@@ -43,23 +43,23 @@ elif M.run_fasttree == True:
 rule rename_tree_tips:
     """Add "_split_00001" suffix to tree tips names to bind with profileDB"""
     input:
-        tree=os.path.join(dirs_dict["TREES"], "{group}", "{group}-tree.done"),
+        tree=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}-tree.done"),
     output:
-        done=os.path.join(dirs_dict["TREES"], "{group}", "{group}_combined.done"),
-        tree=os.path.join(dirs_dict["TREES"], "{group}", "{group}_renamed.nwk"),
-        fasta=os.path.join(dirs_dict["TREES"], "{group}", "{group}_renamed.faa"),
-        fasta_all=os.path.join(dirs_dict["TREES"], "{group}", "{group}_renamed_all.faa"),
+        done=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}_combined.done"),
+        tree=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}_renamed.nwk"),
+        fasta=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}_renamed.faa"),
+        fasta_all=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}_renamed_all.faa"),
     log:
         rule_log("rename_tree_tips", "rename_tree_tips_{group}"),
     threads: M.T("rename_tree_tips")
     params:
-        fasttree=os.path.join(dirs_dict["TREES"], "{group}", "{group}.nwk"),
-        iqtree=os.path.join(dirs_dict["TREES"], "{group}", "{group}.iqtree"),
+        fasttree=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}.nwk"),
+        iqtree=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}.iqtree"),
         fasta=os.path.join(
-            dirs_dict["MSA"], "{group}", "{group}_aligned_trimmed_filtered.fa"
+            dirs_dict["PHYLO"], "{group}", "{group}_aligned_trimmed_filtered.fa"
         ),
         fasta_all=os.path.join(
-            dirs_dict["COMBINED_DIR"], "{group}", "{group}-all.faa"
+            dirs_dict["HMM_HITS_DIR"], "{group}", "{group}-all.faa"
         ),
     run:
         # rename tree tips

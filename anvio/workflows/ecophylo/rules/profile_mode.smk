@@ -58,10 +58,10 @@ rule make_anvio_state_file:
     threads: M.T("make_anvio_state_file")
     params:
         tax_data_final=os.path.join(
-            dirs_dict["MISC_DATA"], "{group}", "{group}_scg_taxonomy_data.tsv"
+            dirs_dict["PROFILE_DIR"], "{group}", "{group}_scg_taxonomy_data.tsv"
         ),
         misc_data_final=os.path.join(
-            dirs_dict["MISC_DATA"], "{group}", "{group}_misc.tsv"
+            dirs_dict["PROFILE_DIR"], "{group}", "{group}_misc.tsv"
         ),
     run:
         # Read in misc data headers for layer_order
@@ -218,7 +218,7 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
     params:
         tax_data_final=rules.anvi_estimate_scg_taxonomy_reps.output.tax_data_final,
         profileDB=os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db"),
-        tree_profileDB=os.path.join(dirs_dict["TREES"], "{group}", "{group}-PROFILE.db"),
+        tree_profileDB=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}-PROFILE.db"),
         misc_data=rules.make_misc_data.output.misc_data_final,
     run:
         state = os.path.join(

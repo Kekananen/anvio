@@ -15,24 +15,19 @@ cat all neccessary files:
         files=lambda wildcards: M.get_input_files_combine_sequence_data(wildcards.group),
     output:
         NT_all=os.path.join(
-            dirs_dict["COMBINED_DIR"], "{group}", "{group}-all.fna"
+            dirs_dict["HMM_HITS_DIR"], "{group}", "{group}-all.fna"
         ),
         AA_all=os.path.join(
-            dirs_dict["COMBINED_DIR"], "{group}", "{group}-all.faa"
-        ),
-        reformat_report_all=os.path.join(
-            dirs_dict["COMBINED_DIR"],
-            "{group}",
-            "{group}-reformat-report-all.txt",
+            dirs_dict["HMM_HITS_DIR"], "{group}", "{group}-all.faa"
         ),
         external_gene_calls_all=os.path.join(
-            dirs_dict["COMBINED_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             "{group}",
             "{group}-external_gene_calls_all.tsv",
         ),
         done=touch(
             os.path.join(
-                dirs_dict["COMBINED_DIR"],
+                dirs_dict["HMM_HITS_DIR"],
                 "{group}",
                 "{group}-combine_sequence_data.done",
             )
@@ -45,43 +40,25 @@ cat all neccessary files:
         # TODO: do the check at the previous step and provide list of sample for this rule
         # get list of unique hmm sources and hmm names from the group
         hmm_sources_name = []
-        unique_source = []
         for hmm, value in M.hmm_dict.items():
             if value["group"] == wildcards.group:
                 hmm_sources_name.append((value["source"], value["name"]))
-        # list of hmm_hits file
-        hmm_hits = [
-            os.path.join(
-                dirs_dict["HMM_HITS_DIR"],
-                sample_name,
-                f"{hmm_source}-dom-hmmsearch",
-                "hmm_hits_filtered.txt",
-            )
-            for sample_name in M.names_list
-            for hmm_source in unique_source
-        ]
         # list for various paths, to merge later
         NT_list = []
         AA_list = []
-        AA_reformat_list = []
         external_gene_calls_reformat_list = []
-        # check for hmm hit per sample
+        # check for hmm hit per sample via process_hmm_hits done file
         for hmm_source, hmm_name in hmm_sources_name:
-            contigs_db_with_hmm_hits = []
             contigs_db_with_hmm_NO_hits = []
             for sample_name in M.names_list:
-                hmm_hit = os.path.join(
+                done_path = os.path.join(
                     dirs_dict["HMM_HITS_DIR"],
                     sample_name,
-                    f"{hmm_source}-dom-hmmsearch",
-                    "hmm_hits_filtered.txt",
+                    hmm_source,
+                    hmm_name,
+                    f"{sample_name}-{hmm_name}-processed.done",
                 )
-                df = pd.read_csv(hmm_hit, sep="\t")
-                df = df[df.source == hmm_source]
-                gene_name_list = df["gene_name"].tolist()
-                if hmm_name in gene_name_list:
-                    contigs_db_with_hmm_hits.append(sample_name)
-                    # add path to merge
+                if os.path.exists(done_path):
                     working_dir = os.path.join(
                         dirs_dict["HMM_HITS_DIR"],
                         f"{sample_name}",
@@ -96,33 +73,26 @@ cat all neccessary files:
                         working_dir,
                         f"{sample_name}-{hmm_name}-hmm_hits_renamed.faa",
                     )
-                    NT_reformat_path = os.path.join(
-                        working_dir,
-                        f"{sample_name}-{hmm_name}-reformat_report_NT.txt",
-                    )
-                    AA_reformat_path = os.path.join(
-                        working_dir,
-                        f"{sample_name}-{hmm_name}-reformat_report_AA.txt",
-                    )
-                    external_gene_calls_reformat_reformat_path = os.path.join(
+                    egc_path = os.path.join(
                         working_dir,
                         f"{sample_name}-{hmm_name}-external_gene_calls_renamed.tsv",
                     )
-                    NT_list.append(NT_path)
-                    AA_list.append(AA_path)
-                    AA_reformat_list.append(AA_reformat_path)
-                    external_gene_calls_reformat_list.append(
-                        external_gene_calls_reformat_reformat_path
-                    )
+                    if os.path.exists(NT_path):
+                        NT_list.append(NT_path)
+                    if os.path.exists(AA_path):
+                        AA_list.append(AA_path)
+                    if os.path.exists(egc_path):
+                        external_gene_calls_reformat_list.append(egc_path)
                 else:
                     contigs_db_with_hmm_NO_hits.append(sample_name)
-            outfile = os.path.join(
-                dirs_dict["LOGS_DIR"],
-                f"contigDBs_with_no_hmm_hit_{hmm_source}-{hmm_name}.log",
-            )
-            with open(outfile, "a") as outfile:
-                for element in contigs_db_with_hmm_NO_hits:
-                    outfile.write(element + "\n")
+            if contigs_db_with_hmm_NO_hits:
+                outfile = os.path.join(
+                    dirs_dict["LOGS_DIR"],
+                    f"contigDBs_with_no_hmm_hit_{hmm_source}-{hmm_name}.log",
+                )
+                with open(outfile, "a") as outfile:
+                    for element in contigs_db_with_hmm_NO_hits:
+                        outfile.write(element + "\n")
         # time to merge all these files
         import tempfile, os
 
@@ -140,13 +110,6 @@ cat all neccessary files:
         shell(f"xargs -0 cat < {aa_list.name} > {output.AA_all}")
         os.unlink(aa_list.name)
 
-        reformat_list = tempfile.NamedTemporaryFile(mode='w', delete=False)
-        for f in AA_reformat_list:
-            reformat_list.write(f + '\0')
-        reformat_list.close()
-        shell(f"xargs -0 cat < {reformat_list.name} > {output.reformat_report_all}")
-        os.unlink(reformat_list.name)
-
         col_names = [
             "gene_callers_id",
             "contig",
@@ -158,6 +121,7 @@ cat all neccessary files:
             "source",
             "version",
             "aa_sequence",
+            "header",
         ]
         egc_header = "\t".join(col_names)
         egc_list = tempfile.NamedTemporaryFile(mode='w', delete=False)

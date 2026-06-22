@@ -42,13 +42,13 @@ rule cluster_X_percent_sim_mmseqs:
     run:
         if M.AA_mode == True:
             fasta = os.path.join(
-                dirs_dict["COMBINED_DIR"],
+                dirs_dict["HMM_HITS_DIR"],
                 f"{wildcards.group}",
                 f"{wildcards.group}-all.faa",
             )
         else:
             fasta = os.path.join(
-                dirs_dict["COMBINED_DIR"],
+                dirs_dict["HMM_HITS_DIR"],
                 f"{wildcards.group}",
                 f"{wildcards.group}-all.fna",
             )
@@ -125,11 +125,7 @@ if M.cluster_representative_method == "cluster_rep_with_coverages":
         """Pick a cluster rep with coverage values."""
         input:
             mmseqs_cluster_rep_index=rules.cluster_X_percent_sim_mmseqs.output.mmseqs_cluster_rep_index,
-            reformat_report=os.path.join(
-                dirs_dict["REPRESENTATIVES_DIR"],
-                "{group}",
-                "{group}-reformat-report-all.txt",
-            ),
+            egc_all=rules.combine_sequence_data.output.external_gene_calls_all,
             coverages=os.path.join(
                 dirs_dict["HMM_HITS_DIR"], "gene-coverages.txt"
             ),
@@ -158,37 +154,20 @@ if M.cluster_representative_method == "cluster_rep_with_coverages":
                 index_col=False,
                 names=["representative", "cluster_members"],
             )
-            reformat_report = pd.read_csv(
-                input.reformat_report,
-                sep="\t",
-                index_col=False,
-                names=["new_header", "header"],
-            )
+            egc_all = pd.read_csv(input.egc_all, sep="\t", index_col=False)
             bam = pd.read_csv(input.coverages, sep="\t", index_col=False)
             bam["primary_key"] = (
                 bam["contig"] + "_" + bam["gene_callers_id"].astype(str)
             )
-            reformat_report["gene_callers_id"] = (
-                reformat_report["header"]
-                .str.split("gene_callers_id:|\|start:", expand=True)[1]
-                .astype(str)
+            egc_all["primary_key"] = (
+                egc_all["contig"] + "_" + egc_all["gene_callers_id"].astype(str)
             )
-            reformat_report["contig"] = (
-                reformat_report["header"]
-                .str.split("contig:|\|gene_callers_id:", expand=True)[1]
-                .astype(str)
-            )
-            reformat_report["primary_key"] = (
-                reformat_report["contig"]
-                + "_"
-                + reformat_report["gene_callers_id"].astype(str)
-            )
-            df = pd.merge(reformat_report, bam, on="primary_key", how="inner")
+            df = pd.merge(egc_all, bam, on="primary_key", how="inner")
             df2 = pd.merge(
                 cluster_rep_index,
                 df,
                 left_on="cluster_members",
-                right_on="new_header",
+                right_on="header",
                 how="inner",
             )[["representative", "cluster_members", "mean_cov"]]
 
@@ -265,7 +244,7 @@ rule align_sequences:
             dirs_dict["REPRESENTATIVES_DIR"], "{group}", "{group}-AA_subset.fa"
         ),
     output:
-        fasta=os.path.join(dirs_dict["MSA"], "{group}", "{group}-aligned.fa"),
+        fasta=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}-aligned.fa"),
     log:
         rule_log("align_sequences", "align_sequences_{group}"),
     threads: M.T("align_sequences")
@@ -282,7 +261,7 @@ rule trim_alignment:
     input:
         fasta=rules.align_sequences.output.fasta,
     output:
-        fasta=os.path.join(dirs_dict["MSA"], "{group}", "{group}_aligned_trimmed.fa"),
+        fasta=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}_aligned_trimmed.fa"),
     log:
         rule_log("trim_alignment", "trim_alignment_{group}"),
     threads: M.T("trim_alignment")
@@ -302,9 +281,9 @@ rule remove_sequences_with_X_percent_gaps:
         fasta=rules.trim_alignment.output.fasta,
     output:
         fasta=os.path.join(
-            dirs_dict["MSA"], "{group}", "{group}_aligned_trimmed_filtered.fa"
+            dirs_dict["PHYLO"], "{group}", "{group}_aligned_trimmed_filtered.fa"
         ),
-        seq_counts_tsv=os.path.join(dirs_dict["MSA"], "{group}", "{group}_gaps_counts.tsv"),
+        seq_counts_tsv=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}_gaps_counts.tsv"),
     log:
         rule_log(
             "remove_sequences_with_X_percent_gaps",
@@ -316,7 +295,7 @@ rule remove_sequences_with_X_percent_gaps:
             ["remove_sequences_with_X_percent_gaps", "--max-percentage-gaps"]
         ),
         gap_counts_prefix=lambda wildcards: os.path.join(
-            dirs_dict["MSA"], wildcards.group, f"{wildcards.group}_gaps_counts"
+            dirs_dict["PHYLO"], wildcards.group, f"{wildcards.group}_gaps_counts"
         ),
     shell:
         "anvi-script-reformat-fasta {input} -o {output.fasta} \
@@ -329,7 +308,7 @@ rule extract_QCd_sequence_headers:
     input:
         fasta=rules.remove_sequences_with_X_percent_gaps.output.fasta,
     output:
-        headers=os.path.join(dirs_dict["MSA"], "{group}", "{group}_headers.tmp"),
+        headers=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}_headers.tmp"),
     threads: M.T("extract_QCd_sequence_headers")
     shell:
         "grep '^>' {input.fasta} | sed 's/>//g' > {output.headers}"
@@ -389,14 +368,10 @@ rule count_num_sequences_filtered:
 if not M.AA_mode:
 
     rule build_rep_external_gene_calls:
-        """Build external gene calls TSV from NT and AA representative sequences"""
+        """Build external gene calls TSV by subsetting combined EGC to rep sequences"""
         input:
-            nt_reps=rules.cluster_X_percent_sim_mmseqs.output.fasta,
-            aa_reps=os.path.join(
-                dirs_dict["REPRESENTATIVES_DIR"],
-                "{group}",
-                "{group}-AA_subset.fa",
-            ),
+            reps=rules.cluster_X_percent_sim_mmseqs.output.fasta,
+            egc_all=rules.combine_sequence_data.output.external_gene_calls_all,
         output:
             gene_calls=os.path.join(
                 dirs_dict["REPRESENTATIVES_DIR"],
@@ -409,30 +384,25 @@ if not M.AA_mode:
         run:
             from Bio import SeqIO
 
-            nt_index = SeqIO.index(input.nt_reps, "fasta")
-            aa_index = SeqIO.index(input.aa_reps, "fasta")
+            rep_headers = set(rec.id for rec in SeqIO.parse(input.reps, "fasta"))
 
-            records = []
-            for i, header in enumerate(nt_index, start=1):
-                nt_seq = nt_index[header]
-                aa_seq = str(aa_index[header].seq)
-                records.append({
-                    'gene_callers_id': i,
-                    'contig': header,
-                    'start': 1,
-                    'stop': len(nt_seq.seq),
-                    'direction': 'f',
-                    'partial': 0,
-                    'call_type': 1,
-                    'source': 'EcoPhylo',
-                    'version': anvio.__version__,
-                    'aa_sequence': aa_seq,
-                })
+            egc = pd.read_csv(input.egc_all, sep="\t")
+            egc = egc[egc['header'].isin(rep_headers)].copy()
 
-            nt_index.close()
-            aa_index.close()
+            if egc.empty:
+                egc = pd.DataFrame(columns=[
+                    "gene_callers_id", "contig", "start", "stop",
+                    "direction", "partial", "call_type", "source",
+                    "version", "aa_sequence",
+                ])
+            else:
+                egc['contig'] = egc['header']
+                egc['gene_callers_id'] = range(1, len(egc) + 1)
+                egc = egc[["gene_callers_id", "contig", "start", "stop",
+                           "direction", "partial", "call_type", "source",
+                           "version", "aa_sequence"]]
 
-            pd.DataFrame(records).to_csv(output.gene_calls, sep="\t", index=False)
+            egc.to_csv(output.gene_calls, sep="\t", index=False)
 
     # NOTE: The reps contigs DB is built BEFORE the alignment/trimming/gap-filtering
     # steps. This means the DB contains ALL cluster representatives, even those that
@@ -476,8 +446,8 @@ if not M.AA_mode:
         input:
             db=rules.anvi_run_scg_taxonomy_reps.output.done,
         output:
-            done=touch(os.path.join(dirs_dict["MISC_DATA"], "{group}", "anvi_estimate_scg_taxonomy_for_SCGs.done")),
-            tax_data_final=os.path.join(dirs_dict["MISC_DATA"], "{group}", "{group}_scg_taxonomy_data.tsv"),
+            done=touch(os.path.join(dirs_dict["PROFILE_DIR"], "{group}", "anvi_estimate_scg_taxonomy_for_SCGs.done")),
+            tax_data_final=os.path.join(dirs_dict["PROFILE_DIR"], "{group}", "{group}_scg_taxonomy_data.tsv"),
         log:
             rule_log("anvi_estimate_scg_taxonomy_reps", "anvi_scg_taxonomy_reps_{group}"),
         threads: M.T("anvi_estimate_scg_taxonomy")
