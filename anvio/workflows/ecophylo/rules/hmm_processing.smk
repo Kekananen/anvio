@@ -76,13 +76,13 @@ rule anvi_run_hmms_hmmsearch:
     """Run hmmsearch with input hmms to get domtblout"""
     output:
         done=os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             "{sample_name}",
             "{hmm_source}-dom-hmmsearch",
             "contigs-hmmsearch.done",
         ),
         hmm_hits=os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             "{sample_name}",
             "{hmm_source}-dom-hmmsearch",
             "hmm_hits.txt",
@@ -104,13 +104,13 @@ rule anvi_run_hmms_hmmsearch:
         hmm_source = wildcards.hmm_source
         hmm_dir = os.path.join(M.unique_hmm_source[hmm_source])
         hmmer_output_dir = os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             f"{wildcards.sample_name}",
             f"{hmm_source}-dom-hmmsearch",
         )
         threads = get_hmm_threads(wildcards)
         domtblout = os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             f"{wildcards.sample_name}",
             f"{hmm_source}-dom-hmmsearch",
             "hmm.domtable",
@@ -250,13 +250,13 @@ rule filter_hmm_hits_by_model_coverage:
         hmm_hits=ancient(rules.anvi_run_hmms_hmmsearch.output.hmm_hits),
     output:
         done=os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             "{sample_name}",
             "{hmm_source}-dom-hmmsearch",
             "{sample_name}-{hmm_source}-DB_filtered.done",
         ),
         hmm_hits_filtered=os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             "{sample_name}",
             "{hmm_source}-dom-hmmsearch",
             "hmm_hits_filtered.txt",
@@ -284,7 +284,7 @@ rule filter_hmm_hits_by_model_coverage:
         hmm_source = wildcards.hmm_source
         hmm_dir = os.path.join(M.unique_hmm_source[hmm_source])
         domtblout = os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             f"{wildcards.sample_name}",
             f"{hmm_source}-dom-hmmsearch",
             "hmm.domtable",
@@ -335,7 +335,7 @@ names with reformated names.
         done=ancient(rules.filter_hmm_hits_by_model_coverage.output.done),
     output:
         done=os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             "{sample_name}",
             "{hmm_source}",
             "{hmm_name}",
@@ -349,7 +349,7 @@ names with reformated names.
     threads: M.T("process_hmm_hits")
     params:
         hmm_hits=os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             "{sample_name}",
             "{hmm_source}-dom-hmmsearch",
             "hmm_hits_filtered.txt",
@@ -360,7 +360,7 @@ names with reformated names.
         )
         hmm_source = wildcards.hmm_source
         fasta_output_dir = os.path.join(
-            dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+            dirs_dict["HMM_HITS_DIR"],
             f"{wildcards.sample_name}",
             f"{wildcards.hmm_source}",
             f"{wildcards.hmm_name}",

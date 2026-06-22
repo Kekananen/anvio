@@ -15,24 +15,24 @@ cat all neccessary files:
         files=lambda wildcards: M.get_input_files_combine_sequence_data(wildcards.group),
     output:
         NT_all=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"], "{group}", "{group}-all.fna"
+            dirs_dict["COMBINED_DIR"], "{group}", "{group}-all.fna"
         ),
         AA_all=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"], "{group}", "{group}-all.faa"
+            dirs_dict["COMBINED_DIR"], "{group}", "{group}-all.faa"
         ),
         reformat_report_all=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["COMBINED_DIR"],
             "{group}",
             "{group}-reformat-report-all.txt",
         ),
         external_gene_calls_all=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["COMBINED_DIR"],
             "{group}",
             "{group}-external_gene_calls_all.tsv",
         ),
         done=touch(
             os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["COMBINED_DIR"],
                 "{group}",
                 "{group}-combine_sequence_data.done",
             )
@@ -52,7 +52,7 @@ cat all neccessary files:
         # list of hmm_hits file
         hmm_hits = [
             os.path.join(
-                dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+                dirs_dict["HMM_HITS_DIR"],
                 sample_name,
                 f"{hmm_source}-dom-hmmsearch",
                 "hmm_hits_filtered.txt",
@@ -71,7 +71,7 @@ cat all neccessary files:
             contigs_db_with_hmm_NO_hits = []
             for sample_name in M.names_list:
                 hmm_hit = os.path.join(
-                    dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+                    dirs_dict["HMM_HITS_DIR"],
                     sample_name,
                     f"{hmm_source}-dom-hmmsearch",
                     "hmm_hits_filtered.txt",
@@ -83,7 +83,7 @@ cat all neccessary files:
                     contigs_db_with_hmm_hits.append(sample_name)
                     # add path to merge
                     working_dir = os.path.join(
-                        dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+                        dirs_dict["HMM_HITS_DIR"],
                         f"{sample_name}",
                         f"{hmm_source}",
                         f"{hmm_name}",

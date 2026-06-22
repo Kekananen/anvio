@@ -115,12 +115,12 @@ rule make_misc_data:
     threads: M.T("add_misc_data_to_taxonomy")
     params:
         mmseqs_cluster_rep_index=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{group}-mmseqs_NR_cluster.tsv",
         ),
         coverage_cluster_rep_index=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{group}-coverage_cluster.tsv",
         ),

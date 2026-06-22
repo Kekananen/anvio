@@ -4,18 +4,18 @@ rule cluster_X_percent_sim_mmseqs:
         done=rules.combine_sequence_data.output.done,
     output:
         fasta=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{group}-mmseqs_NR_rep_seq.fasta",
         ),
         mmseqs_cluster_rep_index=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{group}-mmseqs_NR_cluster.tsv",
         ),
         done=touch(
             os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{group}",
                 "{group}-mmseqs_NR_cluster.done",
             )
@@ -25,10 +25,10 @@ rule cluster_X_percent_sim_mmseqs:
     threads: M.T("cluster_X_percent_sim_mmseqs")
     params:
         output_prefix=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"], "{group}", "{group}-mmseqs_NR"
+            dirs_dict["REPRESENTATIVES_DIR"], "{group}", "{group}-mmseqs_NR"
         ),
         mmseqs_tmp=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"], "{group}", "{group}-tmp"
+            dirs_dict["REPRESENTATIVES_DIR"], "{group}", "{group}-tmp"
         ),
         min_seq_id=M.get_param_value_from_config(
             ["cluster_X_percent_sim_mmseqs", "--min-seq-id"]
@@ -42,13 +42,13 @@ rule cluster_X_percent_sim_mmseqs:
     run:
         if M.AA_mode == True:
             fasta = os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["COMBINED_DIR"],
                 f"{wildcards.group}",
                 f"{wildcards.group}-all.faa",
             )
         else:
             fasta = os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["COMBINED_DIR"],
                 f"{wildcards.group}",
                 f"{wildcards.group}-all.fna",
             )
@@ -78,19 +78,19 @@ This will help identify clustering thresholds for OTU like analyses.
 """
     input:
         done=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{group}-mmseqs_NR_cluster.done",
         ),
     output:
         fasta=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{clustering_threshold}",
             "{group}-{clustering_threshold}-mmseqs_NR_rep_seq.fasta",
         ),
         mmseqs_cluster_rep_index=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{clustering_threshold}",
             "{group}-{clustering_threshold}-mmseqs_NR_cluster.tsv",
@@ -107,13 +107,13 @@ This will help identify clustering thresholds for OTU like analyses.
             wildcards.clustering_threshold
         ],
         output_prefix=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{clustering_threshold}",
             "{group}-{clustering_threshold}-mmseqs_NR",
         ),
         mmseqs_tmp=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+            dirs_dict["REPRESENTATIVES_DIR"],
             "{group}",
             "{clustering_threshold}",
             "{group}-{clustering_threshold}-tmp",
@@ -142,7 +142,7 @@ if M.cluster_representative_method == "cluster_rep_with_coverages":
         """
         output:
             target=os.path.join(
-                dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+                dirs_dict["HMM_HITS_DIR"],
                 "{sample_name}-gene-coverages.txt",
             ),
         log:
@@ -165,14 +165,14 @@ if M.cluster_representative_method == "cluster_rep_with_coverages":
         input:
             targets=expand(
                 os.path.join(
-                    dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"],
+                    dirs_dict["HMM_HITS_DIR"],
                     "{sample_name}-gene-coverages.txt",
                 ),
                 sample_name=M.names_list,
             ),
         output:
             txt=os.path.join(
-                dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"], "gene-coverages.txt"
+                dirs_dict["HMM_HITS_DIR"], "gene-coverages.txt"
             ),
         threads: M.T("anvi_profile_blitz")
         shell:
@@ -186,21 +186,21 @@ if M.cluster_representative_method == "cluster_rep_with_coverages":
         input:
             mmseqs_cluster_rep_index=rules.cluster_X_percent_sim_mmseqs.output.mmseqs_cluster_rep_index,
             reformat_report=os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{group}",
                 "{group}-reformat-report-all.txt",
             ),
             coverages=os.path.join(
-                dirs_dict["EXTRACTED_RIBO_PROTEINS_DIR"], "gene-coverages.txt"
+                dirs_dict["HMM_HITS_DIR"], "gene-coverages.txt"
             ),
         output:
             coverage_reps=os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{group}",
                 "{group}-coverage-headers.txt",
             ),
             coverage_cluster_rep_index=os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{group}",
                 "{group}-coverage_cluster.tsv",
             ),
@@ -274,7 +274,7 @@ if M.cluster_representative_method == "cluster_rep_with_coverages":
             coverage_reps=rules.pick_cluster_rep_with_coverage.output.coverage_reps,
         output:
             fasta=os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{group}",
                 "{group}-AA_subset.fa",
             ),
@@ -296,7 +296,7 @@ if M.cluster_representative_method == "mmseqs":
             mmseqs_reps=rules.cluster_X_percent_sim_mmseqs.output.fasta,
         output:
             fasta=os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{group}",
                 "{group}-AA_subset.fa",
             ),
@@ -309,7 +309,7 @@ if M.cluster_representative_method == "mmseqs":
         params:
             fa=rules.combine_sequence_data.output.AA_all,
             headers=os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"], "{group}", "{group}-headers.tmp"
+                dirs_dict["REPRESENTATIVES_DIR"], "{group}", "{group}-headers.tmp"
             ),
         shell:
             """
@@ -322,7 +322,7 @@ rule align_sequences:
     """MSA of AA sequences subset."""
     input:
         source=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"], "{group}", "{group}-AA_subset.fa"
+            dirs_dict["REPRESENTATIVES_DIR"], "{group}", "{group}-AA_subset.fa"
         ),
     output:
         fasta=os.path.join(dirs_dict["MSA"], "{group}", "{group}-aligned.fa"),
@@ -401,7 +401,7 @@ rule count_num_sequences_filtered:
         remove_seq_with_gaps=rules.remove_sequences_with_X_percent_gaps.output.fasta,
         clustering_thresholds=expand(
             os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{{group}}",
                 "{clustering_threshold}",
                 "{{group}}-{clustering_threshold}-mmseqs_NR_rep_seq.fasta",
@@ -410,7 +410,7 @@ rule count_num_sequences_filtered:
         ),
     output:
         target=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_MSA_STATS"], "{group}", "{group}_stats.tsv"
+            dirs_dict["REPRESENTATIVES_DIR"], "{group}", "{group}_stats.tsv"
         ),
     log:
         rule_log("count_num_sequences_filtered", "count_num_sequences_filtered_{group}"),
@@ -489,13 +489,13 @@ if not M.AA_mode:
         input:
             nt_reps=rules.cluster_X_percent_sim_mmseqs.output.fasta,
             aa_reps=os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{group}",
                 "{group}-AA_subset.fa",
             ),
         output:
             gene_calls=os.path.join(
-                dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"],
+                dirs_dict["REPRESENTATIVES_DIR"],
                 "{group}",
                 "{group}-rep-gene-calls.tsv",
             ),

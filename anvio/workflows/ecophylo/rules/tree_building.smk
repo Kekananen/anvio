@@ -59,7 +59,7 @@ rule rename_tree_tips:
             dirs_dict["MSA"], "{group}", "{group}_aligned_trimmed_filtered.fa"
         ),
         fasta_all=os.path.join(
-            dirs_dict["RIBOSOMAL_PROTEIN_FASTAS"], "{group}", "{group}-all.faa"
+            dirs_dict["COMBINED_DIR"], "{group}", "{group}-all.faa"
         ),
     run:
         # rename tree tips

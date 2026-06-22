@@ -73,48 +73,31 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
                             ])
 
 
-        # Directory structure for Snakemake workflow
-        self.dirs_dict.update({"HOME": "ECOPHYLO_WORKFLOW"})
-        self.dirs_dict.update({"EXTRACTED_RIBO_PROTEINS_DIR": os.path.join(self.dirs_dict['HOME'],"01_REFERENCE_PROTEIN_DATA")})
-        self.dirs_dict.update({"RIBOSOMAL_PROTEIN_FASTAS": os.path.join(self.dirs_dict['HOME'],"02_NR_FASTAS")})
-        self.dirs_dict.update({"MSA": os.path.join(self.dirs_dict['HOME'],"03_MSA")})
-        self.dirs_dict.update({"RIBOSOMAL_PROTEIN_MSA_STATS": os.path.join(self.dirs_dict['HOME'],"04_SEQUENCE_STATS")})
-        self.dirs_dict.update({"TREES": os.path.join(self.dirs_dict['HOME'],"05_TREES")})
-        self.dirs_dict.update({"MISC_DATA": os.path.join(self.dirs_dict['HOME'],"06_MISC_DATA")})
-        self.dirs_dict.update({"SCG_NT_FASTAS": os.path.join(self.dirs_dict['HOME'],"07_SCG_NT_FASTAS")})
-        self.dirs_dict.update({"RIBOSOMAL_PROTEIN_FASTAS_RENAMED": os.path.join(self.dirs_dict['HOME'],"08_RIBOSOMAL_PROTEIN_FASTAS_RENAMED")})
-
-        # ReadRecruitmentModule directories (overridden to avoid number conflicts with EcoPhylo dirs)
-        self.dirs_dict.update({"CONTIGS_DIR":  os.path.join(self.dirs_dict['HOME'], "03_REFERENCE_CONTIGS")})
-        self.dirs_dict.update({"MAPPING_DIR":  os.path.join(self.dirs_dict['HOME'], "09_MAPPING")})
-        self.dirs_dict.update({"PROFILE_DIR":  os.path.join(self.dirs_dict['HOME'], "10_ANVIO_PROFILE")})
-        self.dirs_dict.update({"MERGE_DIR":    os.path.join(self.dirs_dict['HOME'], "11_MERGED")})
+        # (dirs_dict is now set entirely in init() to avoid duplication)
 
 
     def init(self):
         """This function is called from within the Snakefile to initialize parameters."""
 
         super().init()
-        #FIXME: Because 00_LOGS is hardcoded in the base class I need to reassign it
-        self.dirs_dict.update({"LOGS_DIR": os.path.join(self.dirs_dict['HOME'],"00_LOGS")})
-        self.dirs_dict.update({"EXTRACTED_RIBO_PROTEINS_DIR": os.path.join(self.dirs_dict['HOME'],"01_REFERENCE_PROTEIN_DATA")})
-        self.dirs_dict.update({"RIBOSOMAL_PROTEIN_FASTAS": os.path.join(self.dirs_dict['HOME'],"02_NR_FASTAS")})
-        self.dirs_dict.update({"MSA": os.path.join(self.dirs_dict['HOME'],"03_MSA")})
-        self.dirs_dict.update({"RIBOSOMAL_PROTEIN_MSA_STATS": os.path.join(self.dirs_dict['HOME'],"04_SEQUENCE_STATS")})
-        self.dirs_dict.update({"TREES": os.path.join(self.dirs_dict['HOME'],"05_TREES")})
-        self.dirs_dict.update({"MISC_DATA": os.path.join(self.dirs_dict['HOME'],"06_MISC_DATA")})
-        self.dirs_dict.update({"SCG_NT_FASTAS": os.path.join(self.dirs_dict['HOME'],"07_SCG_NT_FASTAS")})
-        self.dirs_dict.update({"RIBOSOMAL_PROTEIN_FASTAS_RENAMED": os.path.join(self.dirs_dict['HOME'],"08_RIBOSOMAL_PROTEIN_FASTAS_RENAMED")})
-
-        # ReadRecruitmentModule directories (overridden to avoid number conflicts with EcoPhylo dirs)
-        self.dirs_dict.update({"CONTIGS_DIR":  os.path.join(self.dirs_dict['HOME'], "03_REFERENCE_CONTIGS")})
-        self.dirs_dict.update({"MAPPING_DIR":  os.path.join(self.dirs_dict['HOME'], "09_MAPPING")})
-        self.dirs_dict.update({"PROFILE_DIR":  os.path.join(self.dirs_dict['HOME'], "10_ANVIO_PROFILE")})
-        self.dirs_dict.update({"MERGE_DIR":    os.path.join(self.dirs_dict['HOME'], "11_MERGED")})
+        # Override base-class dirs_dict with EcoPhylo workflow directory structure.
+        # All paths are relative to the user-specified output directory (no HOME wrapper).
+        self.dirs_dict.update({"LOGS_DIR": "00_LOGS"})
+        self.dirs_dict.update({"HMM_HITS_DIR": "01_HMM_HITS"})
+        self.dirs_dict.update({"COMBINED_DIR": "01_HMM_HITS"})
+        self.dirs_dict.update({"REPRESENTATIVES_DIR": "02_REPRESENTATIVES"})
+        self.dirs_dict.update({"CONTIGS_DIR": "03_CONTIGS"})
+        self.dirs_dict.update({"MSA": "04_TREE"})
+        self.dirs_dict.update({"TREES": "04_TREE"})
+        self.dirs_dict.update({"MAPPING_DIR": "05_MAPPING"})
+        self.dirs_dict.update({"QC_DIR": "05_MAPPING"})
+        self.dirs_dict.update({"PROFILE_DIR": "06_ANVIO_PROFILE"})
+        self.dirs_dict.update({"MISC_DATA": "06_ANVIO_PROFILE"})
+        self.dirs_dict.update({"MERGE_DIR": "07_RESULTS"})
 
         # Make log directories
-        if not os.path.exists(os.path.join(self.dirs_dict['HOME'], '00_LOGS/')):
-            os.makedirs(os.path.join(self.dirs_dict['HOME'], '00_LOGS/'))
+        if not os.path.exists(self.dirs_dict['LOGS_DIR']):
+            os.makedirs(self.dirs_dict['LOGS_DIR'])
 
         self.names_list = []
         self.contigs_db_name_path_dict = {}
@@ -142,8 +125,8 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         if not gene_caller_to_use:
             gene_caller_to_use = constants.default_gene_callers[-1]
 
-        sanity_checked_metagenomes_file = os.path.join(self.dirs_dict['HOME'], "sanity_checked_metagenomes.txt")
-        sanity_checked_genomes_file = os.path.join(self.dirs_dict['HOME'], "sanity_checked_genomes.txt")
+        sanity_checked_metagenomes_file = os.path.join(self.dirs_dict['LOGS_DIR'], "sanity_checked_metagenomes.txt")
+        sanity_checked_genomes_file = os.path.join(self.dirs_dict['LOGS_DIR'], "sanity_checked_genomes.txt")
 
         if self.metagenomes:
             filesnpaths.is_file_exists(self.metagenomes)
@@ -261,12 +244,12 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         for group in self.group_names:
             self.fasta_information[group] = {
                 'path': os.path.join(
-                    self.dirs_dict['RIBOSOMAL_PROTEIN_FASTAS'],
+                    self.dirs_dict['REPRESENTATIVES_DIR'],
                     group,
                     f"{group}-mmseqs_NR_rep_seq.fasta",
                 ),
                 'external_gene_calls': os.path.join(
-                    self.dirs_dict['RIBOSOMAL_PROTEIN_FASTAS'],
+                    self.dirs_dict['REPRESENTATIVES_DIR'],
                     group,
                     f"{group}-rep-gene-calls.tsv",
                 ),
@@ -328,7 +311,7 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         for hmm, value in self.hmm_dict.items():
             group = value['group']
             hmm_source = value['source']
-            target_file = os.path.join(self.dirs_dict['RIBOSOMAL_PROTEIN_MSA_STATS'], f"{group}", f"{group}_stats.tsv")
+            target_file = os.path.join(self.dirs_dict['REPRESENTATIVES_DIR'], f"{group}", f"{group}_stats.tsv")
             target_files.append(target_file)
 
             if not self.samples_txt_file:
@@ -379,7 +362,7 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
 
         # for samples and unique hmm_source, get the input files
         for hmm_source, hmm_name in hmm_source_name:
-            input_file = [os.path.join(self.dirs_dict['EXTRACTED_RIBO_PROTEINS_DIR'], sample_name, hmm_source, hmm_name, f"{sample_name}-{hmm_name}-processed.done") for sample_name in self.names_list]
+            input_file = [os.path.join(self.dirs_dict['HMM_HITS_DIR'], sample_name, hmm_source, hmm_name, f"{sample_name}-{hmm_name}-processed.done") for sample_name in self.names_list]
             input_files.extend(input_file)
 
         return input_files
