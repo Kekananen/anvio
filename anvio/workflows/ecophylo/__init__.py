@@ -331,7 +331,7 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         target_file = os.path.join(self.dirs_dict['MISC_DATA'], "{group}", "{group}_misc.tsv")
         target_files.append(target_file)
 
-        if self.run_scg_taxonomy:
+        if self.run_scg_taxonomy and not self.AA_mode:
             target_file = os.path.join(self.dirs_dict['MISC_DATA'], "{group}", "anvi_estimate_scg_taxonomy_for_SCGs.done")
             target_files.append(target_file)
 
