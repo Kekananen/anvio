@@ -72,66 +72,6 @@ rule cluster_X_percent_sim_mmseqs:
         )
 
 
-rule cluster_X_percent_sim_mmseqs_OTUs:
-    """Cluster extracted proteins within percent identity parameter space provided by user.
-This will help identify clustering thresholds for OTU like analyses.
-"""
-    input:
-        done=os.path.join(
-            dirs_dict["REPRESENTATIVES_DIR"],
-            "{group}",
-            "{group}-mmseqs_NR_cluster.done",
-        ),
-    output:
-        fasta=os.path.join(
-            dirs_dict["REPRESENTATIVES_DIR"],
-            "{group}",
-            "{clustering_threshold}",
-            "{group}-{clustering_threshold}-mmseqs_NR_rep_seq.fasta",
-        ),
-        mmseqs_cluster_rep_index=os.path.join(
-            dirs_dict["REPRESENTATIVES_DIR"],
-            "{group}",
-            "{clustering_threshold}",
-            "{group}-{clustering_threshold}-mmseqs_NR_cluster.tsv",
-        ),
-    log:
-        rule_log(
-            "cluster_X_percent_sim_mmseqs_OTUs",
-            "cluster_X_mmseqs_{group}_{clustering_threshold}",
-        ),
-    threads: M.T("cluster_X_percent_sim_mmseqs")
-    params:
-        NT_all=rules.combine_sequence_data.output.NT_all,
-        min_seq_id=lambda wildcards: M.clustering_threshold_dict[
-            wildcards.clustering_threshold
-        ],
-        output_prefix=os.path.join(
-            dirs_dict["REPRESENTATIVES_DIR"],
-            "{group}",
-            "{clustering_threshold}",
-            "{group}-{clustering_threshold}-mmseqs_NR",
-        ),
-        mmseqs_tmp=os.path.join(
-            dirs_dict["REPRESENTATIVES_DIR"],
-            "{group}",
-            "{clustering_threshold}",
-            "{group}-{clustering_threshold}-tmp",
-        ),
-        cov_mode=M.get_param_value_from_config(
-            ["cluster_X_percent_sim_mmseqs", "--cov-mode"]
-        ),
-        additional_params=M.get_param_value_from_config(
-            ["cluster_X_percent_sim_mmseqs", "additional_params"]
-        ),
-    shell:
-        "mmseqs easy-cluster {params.NT_all} \
-                               {params.output_prefix} \
-                               {params.mmseqs_tmp} \
-                               --threads {threads} \
-                               --min-seq-id {params.min_seq_id} \
-                               --cov-mode {params.cov_mode} \
-                               {params.additional_params} >> {log} 2>&1"
 
 
 if M.cluster_representative_method == "cluster_rep_with_coverages":
@@ -399,15 +339,6 @@ rule count_num_sequences_filtered:
     """Record the number of sequences filtered at each step of the workflow"""
     input:
         remove_seq_with_gaps=rules.remove_sequences_with_X_percent_gaps.output.fasta,
-        clustering_thresholds=expand(
-            os.path.join(
-                dirs_dict["REPRESENTATIVES_DIR"],
-                "{{group}}",
-                "{clustering_threshold}",
-                "{{group}}-{clustering_threshold}-mmseqs_NR_rep_seq.fasta",
-            ),
-            clustering_threshold=M.clustering_param_space_list_strings,
-        ),
     output:
         target=os.path.join(
             dirs_dict["REPRESENTATIVES_DIR"], "{group}", "{group}_stats.tsv"
@@ -420,19 +351,7 @@ rule count_num_sequences_filtered:
         cluster_mmseqs=rules.cluster_X_percent_sim_mmseqs.output.fasta,
     run:
         def count_num_sequences(fasta):
-            """This function counts the number of sequences in a fasta file
-
-            Parameters
-            ==========
-            fasta: fasta
-
-            Returns
-            =======
-            num_seqs : int
-            """
-
             num_seqs = 0
-
             for line in fasta:
                 if line.startswith(">"):
                     num_seqs += 1
@@ -445,16 +364,6 @@ rule count_num_sequences_filtered:
         num_seqs_list = [
             count_num_sequences(open(fasta)) for fasta in input_files_list
         ]
-        clustering_threshold_attributes_list = []
-        for file in input.clustering_thresholds:
-            path = file
-            threshold = file.split("/")[3]
-            with open(file) as fasta:
-                num_seqs = count_num_sequences(fasta)
-            clustering_threshold_attributes = [str(threshold), str(num_seqs), path]
-            clustering_threshold_attributes_list.append(
-                clustering_threshold_attributes
-            )
         with open(output.target, "w") as f:
             col_names = ["rule_name", "num_sequences_left", "rel_path"]
             step1 = [
@@ -472,12 +381,7 @@ rule count_num_sequences_filtered:
                 str(num_seqs_list[2]),
                 input.remove_seq_with_gaps,
             ]
-            lines = [
-                col_names,
-                step1,
-                step2,
-                step3,
-            ] + clustering_threshold_attributes_list
+            lines = [col_names, step1, step2, step3]
             for line in lines:
                 f.write("\t".join(line) + "\n")
 

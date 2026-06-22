@@ -37,7 +37,6 @@
             "threads":                      {"type": "int",   "default": 5},
             "--min-seq-id":                 {"type": "float", "default": 0.97},
             "--cov-mode":                   {"type": "int",   "default": 1},
-            "clustering_threshold_for_OTUs":{"type": "list",  "default": [0.99, 0.98]},
             "AA_mode":                      {"type": "bool",  "default": false},
             "additional_params":            {"type": "str",   "default": ""}
         },

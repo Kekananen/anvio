@@ -282,18 +282,6 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         if self.cluster_representative_method == 'cluster_rep_with_coverages' and self.AA_mode == True:
             raise ConfigError("The EcoPhylo workflow can't use the cluster representative method cluster_rep_with_coverages in AA_mode")
 
-        # Parse clustering parameter space
-        self.clustering_param_space = self.get_param_value_from_config(['cluster_X_percent_sim_mmseqs', 'clustering_threshold_for_OTUs'])
-        for count, number in enumerate(self.clustering_param_space):
-            if type(number) != float:
-                raise ConfigError(f"Element number {count} ({number}) in your clustering_threshold_for_OTUs argument does not appear to be an float. Please provide "
-                                  f"a clustering threshold in decimal format i.e. 90% as 0.90")
-            if number > 1:
-                raise ConfigError(f"The number {number} in your clustering_threshold_for_OTUs argument is not less that one. Please provide "
-                                  f"a clustering threshold in decimal format i.e. 90% as 0.90")
-        self.clustering_param_space_list_strings = [str(format(clustering_threshold, '.2f')).split(".")[1] + "_percent" for clustering_threshold in self.clustering_param_space]
-        self.clustering_threshold_dict = dict(zip(self.clustering_param_space_list_strings, self.clustering_param_space))
-
         # global target files
         self.target_files = self.get_target_files()
 
