@@ -124,15 +124,29 @@ cat all neccessary files:
                 for element in contigs_db_with_hmm_NO_hits:
                     outfile.write(element + "\n")
         # time to merge all these files
-        with open(output.NT_all, "a") as NT_output:
-            for f in NT_list:
-                NT_output.write(open(f).read())
-        with open(output.AA_all, "a") as AA_all:
-            for f in AA_list:
-                AA_all.write(open(f).read())
-        with open(output.reformat_report_all, "a") as reformat_report_all:
-            for f in AA_reformat_list:
-                reformat_report_all.write(open(f).read())
+        import tempfile, os
+
+        nt_list = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        for f in NT_list:
+            nt_list.write(f + '\0')
+        nt_list.close()
+        shell(f"xargs -0 cat < {nt_list.name} > {output.NT_all}")
+        os.unlink(nt_list.name)
+
+        aa_list = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        for f in AA_list:
+            aa_list.write(f + '\0')
+        aa_list.close()
+        shell(f"xargs -0 cat < {aa_list.name} > {output.AA_all}")
+        os.unlink(aa_list.name)
+
+        reformat_list = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        for f in AA_reformat_list:
+            reformat_list.write(f + '\0')
+        reformat_list.close()
+        shell(f"xargs -0 cat < {reformat_list.name} > {output.reformat_report_all}")
+        os.unlink(reformat_list.name)
+
         col_names = [
             "gene_callers_id",
             "contig",
@@ -145,8 +159,11 @@ cat all neccessary files:
             "version",
             "aa_sequence",
         ]
-        with open(output.external_gene_calls_all, "a") as external_gene_calls_all:
-            external_gene_calls_all.write("\t".join(col_names) + "\n")
-            for f in external_gene_calls_reformat_list:
-                file = open(f).read().splitlines(True)
-                external_gene_calls_all.writelines(file[1:])
+        egc_header = "\t".join(col_names)
+        egc_list = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        for f in external_gene_calls_reformat_list:
+            egc_list.write(f + '\0')
+        egc_list.close()
+        shell(f"echo '{egc_header}' > {output.external_gene_calls_all}")
+        shell(f"xargs -0 tail -q -n +2 < {egc_list.name} >> {output.external_gene_calls_all}")
+        os.unlink(egc_list.name)
