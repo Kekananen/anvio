@@ -270,7 +270,7 @@ rule cat_hmm_hit_seqs:
     run:
         faa_list = []
         for sample_name in M.names_list:
-            if not M.hmm_source_presence[(sample_name, wildcards.hmm_source)]:
+            if not M.path_is_a[(sample_name, wildcards.hmm_source)]:
                 continue
             faa = os.path.join(
                 dirs_dict["HMM_HITS_DIR"],
@@ -363,6 +363,12 @@ rule filter_hmm_hits_combined:
             total = 0
             passing = 0
         else:
+            # Only keep survivors matching the HMM names declared for this source
+            target_names = set(
+                v['name'] for v in M.hmm_dict.values()
+                if v['source'] == wildcards.hmm_source
+            )
+
             survivors = set()
             total = 0
             with open(domtblout_path) as f:
@@ -371,6 +377,8 @@ rule filter_hmm_hits_combined:
                         continue
                     parts = line.split()
                     if len(parts) < 17:
+                        continue
+                    if parts[3] not in target_names:
                         continue
                     total += 1
                     target_name = parts[0]
@@ -423,6 +431,12 @@ rule filter_hmm_hits_sample:
             total = 0
             passing = 0
         else:
+            # Only keep survivors matching the HMM names declared for this source
+            target_names = set(
+                v['name'] for v in M.hmm_dict.values()
+                if v['source'] == wildcards.hmm_source
+            )
+
             survivors = set()
             total = 0
             with open(domtblout_path) as f:
@@ -431,6 +445,8 @@ rule filter_hmm_hits_sample:
                         continue
                     parts = line.split()
                     if len(parts) < 17:
+                        continue
+                    if parts[3] not in target_names:
                         continue
                     total += 1
                     target_name = parts[0]
@@ -530,25 +546,12 @@ rule process_hmm_hits:
         if os.path.getsize(survivor_path) == 0:
             pass
         elif is_path_b:
-            # Path B: survivors are bare gene caller IDs from ALL HMMs that
-            # passed model coverage. Query hmm_hits to keep only IDs
-            # belonging to this specific hmm_source/hmm_name.
-            database = db.DB(contigs_db, None, ignore_version=True)
-            tables = database.get_table_names()
-            if 'hmm_hits' in tables:
-                hmm_hits = database.get_table_as_dataframe('hmm_hits')
-                valid_gids = set(hmm_hits[
-                    (hmm_hits['source'] == hmm_source) &
-                    (hmm_hits['gene_name'] == hmm_name)
-                ]['gene_callers_id'].astype(str))
-            else:
-                valid_gids = set()
-            database.disconnect()
-
+            # Path B: survivors are bare gene caller IDs already filtered
+            # to this HMM name by filter_hmm_hits_sample.
             with open(survivor_path) as f:
                 for line in f:
                     gid = line.strip()
-                    if gid and gid in valid_gids:
+                    if gid:
                         survivor_gene_callers_ids.append(gid)
                         survivors.append(f"{sample_name}__{hmm_source}__{hmm_name}__{gid}")
         else:
