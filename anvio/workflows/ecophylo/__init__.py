@@ -94,6 +94,7 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         self.dirs_dict["MAPPING_DIR"] = "05_MAPPING"
         self.dirs_dict["PROFILE_DIR"] = "06_ANVIO_PROFILE"
         self.dirs_dict["MERGE_DIR"] = "07_RESULTS"
+        self.dirs_dict["POOLED_HMM_DIR"] = "01_HMM_HITS/POOLED_HMM"
 
         super().init()
         # QC_DIR is inherited from ReadRecruitmentModule but kept at runtime.

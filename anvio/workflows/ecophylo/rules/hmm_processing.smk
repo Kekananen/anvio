@@ -105,8 +105,8 @@ def get_process_hmm_hits_input(wildcards):
         hmm_key = f"{wildcards.hmm_source}_{wildcards.hmm_name}"
         group = M.hmm_dict[hmm_key]['group']
         return os.path.join(
-            dirs_dict["HMM_HITS_DIR"], group,
-            f"{group}_{wildcards.hmm_source}_survivor_headers.txt",
+            dirs_dict["POOLED_HMM_DIR"],
+            f"{group}-{wildcards.hmm_source}_survivor_headers.txt",
         )
 
     return os.path.join(
@@ -262,9 +262,8 @@ rule cat_hmm_hit_seqs:
         done_files=get_extract_done_files,
     output:
         combined=os.path.join(
-            dirs_dict["HMM_HITS_DIR"],
-            "{group}",
-            "{group}_{hmm_source}_combined.faa",
+            dirs_dict["POOLED_HMM_DIR"],
+            "{group}-{hmm_source}_combined.faa",
         ),
     log:
         rule_log("cat_hmm_hit_seqs", "cat_hmm_hit_seqs-{group}-{hmm_source}"),
@@ -304,9 +303,8 @@ rule hmmsearch_combined:
         combined=rules.cat_hmm_hit_seqs.output.combined,
     output:
         domtblout=os.path.join(
-            dirs_dict["HMM_HITS_DIR"],
-            "{group}",
-            "{group}_{hmm_source}_combined.domtblout",
+            dirs_dict["POOLED_HMM_DIR"],
+            "{group}-{hmm_source}_combined.domtblout",
         ),
     log:
         rule_log("hmmsearch_combined", "hmmsearch_combined-{group}-{hmm_source}"),
@@ -346,9 +344,8 @@ rule filter_hmm_hits_combined:
         domtblout=rules.hmmsearch_combined.output.domtblout,
     output:
         survivors=os.path.join(
-            dirs_dict["HMM_HITS_DIR"],
-            "{group}",
-            "{group}_{hmm_source}_survivor_headers.txt",
+            dirs_dict["POOLED_HMM_DIR"],
+            "{group}-{hmm_source}_survivor_headers.txt",
         ),
     log:
         rule_log("filter_hmm_hits_combined", "filter_hmm_hits_combined-{group}-{hmm_source}"),
@@ -533,11 +530,25 @@ rule process_hmm_hits:
         if os.path.getsize(survivor_path) == 0:
             pass
         elif is_path_b:
-            # Path B: survivors are bare gene callers IDs
+            # Path B: survivors are bare gene caller IDs from ALL HMMs that
+            # passed model coverage. Query hmm_hits to keep only IDs
+            # belonging to this specific hmm_source/hmm_name.
+            database = db.DB(contigs_db, None, ignore_version=True)
+            tables = database.get_table_names()
+            if 'hmm_hits' in tables:
+                hmm_hits = database.get_table_as_dataframe('hmm_hits')
+                valid_gids = set(hmm_hits[
+                    (hmm_hits['source'] == hmm_source) &
+                    (hmm_hits['gene_name'] == hmm_name)
+                ]['gene_callers_id'].astype(str))
+            else:
+                valid_gids = set()
+            database.disconnect()
+
             with open(survivor_path) as f:
                 for line in f:
                     gid = line.strip()
-                    if gid:
+                    if gid and gid in valid_gids:
                         survivor_gene_callers_ids.append(gid)
                         survivors.append(f"{sample_name}__{hmm_source}__{hmm_name}__{gid}")
         else:
