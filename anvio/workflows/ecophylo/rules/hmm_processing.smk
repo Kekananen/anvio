@@ -362,8 +362,11 @@ rule filter_hmm_hits_combined:
         # If domtblout is empty (no input sequences), write empty survivors
         if os.path.getsize(domtblout_path) == 0:
             shell("touch {output.survivors}")
+            total = 0
+            passing = 0
         else:
             survivors = set()
+            total = 0
             with open(domtblout_path) as f:
                 for line in f:
                     if line.startswith('#') or not line.strip():
@@ -371,6 +374,7 @@ rule filter_hmm_hits_combined:
                     parts = line.split()
                     if len(parts) < 17:
                         continue
+                    total += 1
                     target_name = parts[0]
                     hmm_length = int(parts[5])
                     hmm_start = int(parts[15])
@@ -382,6 +386,13 @@ rule filter_hmm_hits_combined:
             with open(output.survivors, 'w') as out:
                 for h in sorted(survivors):
                     out.write(h + '\n')
+
+            passing = len(survivors)
+
+        with open(log, 'w') as f:
+            f.write(f"Model coverage threshold: {params.min_model_coverage}\n")
+            f.write(f"Total hits in domtblout: {total}\n")
+            f.write(f"Hits passing filter: {passing}\n")
 
 
 # --------------------------------------------------------------------------------
@@ -411,8 +422,11 @@ rule filter_hmm_hits_sample:
 
         if os.path.getsize(domtblout_path) == 0:
             shell("touch {output.survivors}")
+            total = 0
+            passing = 0
         else:
             survivors = set()
+            total = 0
             with open(domtblout_path) as f:
                 for line in f:
                     if line.startswith('#') or not line.strip():
@@ -420,6 +434,7 @@ rule filter_hmm_hits_sample:
                     parts = line.split()
                     if len(parts) < 17:
                         continue
+                    total += 1
                     target_name = parts[0]
                     hmm_length = int(parts[5])
                     hmm_start = int(parts[15])
@@ -431,6 +446,13 @@ rule filter_hmm_hits_sample:
             with open(output.survivors, 'w') as out:
                 for h in sorted(survivors):
                     out.write(h + '\n')
+
+            passing = len(survivors)
+
+        with open(log, 'w') as f:
+            f.write(f"Model coverage threshold: {params.min_model_coverage}\n")
+            f.write(f"Total hits in domtblout: {total}\n")
+            f.write(f"Hits passing filter: {passing}\n")
 
 
 # --------------------------------------------------------------------------------
