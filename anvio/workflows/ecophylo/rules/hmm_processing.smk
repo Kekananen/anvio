@@ -52,14 +52,6 @@ def get_hmm_target(hmm_source):
             return f.read().strip()
 
 
-def is_hmm_source_in_contigs_db(contigs_db_path, hmm_source):
-    """Check if an HMM source already exists in a contigs database."""
-    database = db.DB(contigs_db_path, None, ignore_version=True)
-    hmm_sources = database.get_table_as_dict('hmm_hits_info')
-    database.disconnect()
-    return hmm_source in hmm_sources
-
-
 def get_hmm_hits_txt(contigs_db, out_file):
     """Extract the hmm_hits table from a contigs-db."""
     database = db.DB(contigs_db, None, ignore_version=True)
@@ -83,7 +75,7 @@ def get_hmm_hits_txt(contigs_db, out_file):
 
 
 def get_extract_done_files(wildcards):
-    """Return list of extract_hmm_hit_seqs .done files for all samples for a given source."""
+    """Return list of extract_hmm_hit_seqs .done files for Path A samples only."""
     return [
         os.path.join(
             dirs_dict["HMM_HITS_DIR"], sample,
@@ -91,17 +83,32 @@ def get_extract_done_files(wildcards):
             "contigs-hmm-extracted.done",
         )
         for sample in M.names_list
+        if M.hmm_source_presence[(sample, wildcards.hmm_source)]
     ]
 
 
-def get_survivors_path(wildcards):
-    """Resolve the survivor headers path from filter_hmm_hits_combined output."""
-    hmm_key = f"{wildcards.hmm_source}_{wildcards.hmm_name}"
-    group = M.hmm_dict[hmm_key]['group']
-    return os.path.join(
-        dirs_dict["HMM_HITS_DIR"], group,
-        f"{group}_{wildcards.hmm_source}_survivor_headers.txt",
-    )
+def get_process_hmm_hits_input(wildcards):
+    """Return the survivors path based on whether the sample's contigs DB has HMMs.
+
+    Path A (DB has HMMs) → group-level survivors from filter_hmm_hits_combined.
+    Path B (DB lacks HMMs) → per-sample survivors from filter_hmm_hits_sample.
+    """
+    if M.hmm_source_presence[(wildcards.sample_name, wildcards.hmm_source)]:
+        # Path A: group-level survivors (from filter_hmm_hits_combined)
+        hmm_key = f"{wildcards.hmm_source}_{wildcards.hmm_name}"
+        group = M.hmm_dict[hmm_key]['group']
+        return os.path.join(
+            dirs_dict["HMM_HITS_DIR"], group,
+            f"{group}_{wildcards.hmm_source}_survivor_headers.txt",
+        )
+    else:
+        # Path B: per-sample survivors (from filter_hmm_hits_sample)
+        return os.path.join(
+            dirs_dict["HMM_HITS_DIR"],
+            wildcards.sample_name,
+            f"{wildcards.hmm_source}-dom-hmmsearch",
+            f"{wildcards.sample_name}_{wildcards.hmm_source}_survivor_headers.txt",
+        )
 
 
 # --------------------------------------------------------------------------------
@@ -122,6 +129,12 @@ rule extract_hmm_hit_seqs:
             "{sample_name}",
             "{hmm_source}-dom-hmmsearch",
             "hmm_hits.txt",
+        ),
+        domtblout=os.path.join(
+            dirs_dict["HMM_HITS_DIR"],
+            "{sample_name}",
+            "{hmm_source}-dom-hmmsearch",
+            "hmm.domtable",
         ),
         done=touch(os.path.join(
             dirs_dict["HMM_HITS_DIR"],
@@ -150,7 +163,7 @@ rule extract_hmm_hit_seqs:
         os.makedirs(hmmer_output_dir, exist_ok=True)
 
         # Ensure HMM source is in the contigs DB
-        if not is_hmm_source_in_contigs_db(contigs_db_path, hmm_source):
+        if not M.hmm_source_presence[(wildcards.sample_name, hmm_source)]:
             if hmm_source in M.internal_hmm_sources:
                 shell("anvi-run-hmms -c {contigs_db_path} \
                                      --hmmer-program hmmsearch \
@@ -217,6 +230,11 @@ rule extract_hmm_hit_seqs:
         # Get hmm_hits.txt
         get_hmm_hits_txt(contigs_db_path, output.hmm_hits)
 
+        # Ensure domtblout exists (created by anvi-run-hmms for Path B;
+        # empty touch for Path A where it won't be consumed downstream)
+        if not os.path.exists(output.domtblout):
+            shell("touch {output.domtblout}")
+
 
 # --------------------------------------------------------------------------------
 # Step B1: Concatenate per-sample FASTA files per (group, source)
@@ -237,6 +255,8 @@ rule cat_hmm_hit_seqs:
     run:
         faa_list = []
         for sample_name in M.names_list:
+            if not M.hmm_source_presence[(sample_name, wildcards.hmm_source)]:
+                continue
             faa = os.path.join(
                 dirs_dict["HMM_HITS_DIR"],
                 sample_name,
@@ -350,13 +370,62 @@ rule filter_hmm_hits_combined:
 
 
 # --------------------------------------------------------------------------------
+# Step B4: Filter per-sample domtblout by model coverage (Path B)
+# --------------------------------------------------------------------------------
+
+rule filter_hmm_hits_sample:
+    """Filter per-sample domtblout by model coverage, write survivor headers."""
+    input:
+        domtblout=rules.extract_hmm_hit_seqs.output.domtblout,
+    output:
+        survivors=os.path.join(
+            dirs_dict["HMM_HITS_DIR"],
+            "{sample_name}",
+            "{hmm_source}-dom-hmmsearch",
+            "{sample_name}_{hmm_source}_survivor_headers.txt",
+        ),
+    log:
+        rule_log("filter_hmm_hits_sample", "filter_hmm_hits_sample-{sample_name}-{hmm_source}"),
+    threads: M.T("filter_hmm_hits_sample")
+    params:
+        min_model_coverage=M.get_param_value_from_config(
+            ["filter_hmm_hits_sample", "--min-model-coverage"]
+        ),
+    run:
+        domtblout_path = input.domtblout
+
+        if os.path.getsize(domtblout_path) == 0:
+            shell("touch {output.survivors}")
+        else:
+            survivors = set()
+            with open(domtblout_path) as f:
+                for line in f:
+                    if line.startswith('#') or not line.strip():
+                        continue
+                    parts = line.split()
+                    if len(parts) < 17:
+                        continue
+                    target_name = parts[0]
+                    hmm_length = int(parts[5])
+                    hmm_start = int(parts[15])
+                    hmm_stop = int(parts[16])
+                    model_coverage = (hmm_stop - hmm_start) / hmm_length
+                    if model_coverage >= params.min_model_coverage:
+                        survivors.add(target_name)
+
+            with open(output.survivors, 'w') as out:
+                for h in sorted(survivors):
+                    out.write(h + '\n')
+
+
+# --------------------------------------------------------------------------------
 # Step C: Per (sample, source, name) — survivor-filtered AA, NT, EGC extraction
 # --------------------------------------------------------------------------------
 
 rule process_hmm_hits:
     """Extract AA/NT fastas and external-gene-calls for survivors only."""
     input:
-        survivors=get_survivors_path,
+        survivors=get_process_hmm_hits_input,
     output:
         aa_fasta=os.path.join(
             dirs_dict["HMM_HITS_DIR"],
@@ -415,18 +484,27 @@ rule process_hmm_hits:
         if group is None:
             raise ConfigError(f"No group found for HMM source '{hmm_source}', name '{hmm_name}'")
 
-        # Read survivor headers and filter by prefix for this (sample, source, name)
-        survivor_path = os.path.join(
-            dirs_dict["HMM_HITS_DIR"],
-            group,
-            f"{group}_{hmm_source}_survivor_headers.txt",
-        )
-        prefix = f"{sample_name}|{hmm_source}|{hmm_name}|"
+        # Read survivor headers from input (resolved by get_process_hmm_hits_input)
+        survivor_path = input.survivors
+
+        # Determine which path we're on based on the contigs DB
+        is_path_b = not M.hmm_source_presence[(sample_name, hmm_source)]
 
         survivors = []
+        survivor_gene_callers_ids = []
         if os.path.getsize(survivor_path) == 0:
-            survivor_gene_callers_ids = []
+            pass
+        elif is_path_b:
+            # Path B: survivors are bare gene callers IDs
+            with open(survivor_path) as f:
+                for line in f:
+                    gid = line.strip()
+                    if gid:
+                        survivor_gene_callers_ids.append(gid)
+                        survivors.append(f"{sample_name}|{hmm_source}|{hmm_name}|{gid}")
         else:
+            # Path A: survivors are full pipe-delimited headers
+            prefix = f"{sample_name}|{hmm_source}|{hmm_name}|"
             with open(survivor_path) as f:
                 for line in f:
                     line = line.strip()

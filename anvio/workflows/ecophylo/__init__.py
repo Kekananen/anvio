@@ -19,6 +19,7 @@ from anvio.genomedescriptions import GenomeDescriptions
 from anvio.genomedescriptions import MetagenomeDescriptions
 from anvio.artifacts.samples_txt import SamplesTxt
 
+import anvio.db as db
 import anvio.constants as constants
 
 __copyright__ = "Copyleft 2015-2024, The Anvi'o Project (http://anvio.org/)"
@@ -46,9 +47,10 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         self.rules.extend(['extract_hmm_hit_seqs',
                            'anvi_run_scg_taxonomy',
                            'cat_hmm_hit_seqs',
-                           'hmmsearch_combined',
-                           'filter_hmm_hits_combined',
-                           'process_hmm_hits',
+                            'hmmsearch_combined',
+                            'filter_hmm_hits_combined',
+                            'filter_hmm_hits_sample',
+                            'process_hmm_hits',
                            'combine_sequence_data',
 
                            'cluster_X_percent_sim_mmseqs',
@@ -201,6 +203,20 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
 
         else:
             self.external_genomes_names_list = []
+
+        # Pre-compute which (sample, hmm_source) pairs already have HMMs in their contigs DB.
+        # This is done once at init(), before any Snakemake resolution, to avoid confusion
+        # if anvi-run-hmms modifies the contigs DB during execution (which would make a
+        # Path B sample look like Path A on re-resolution).
+        self.hmm_source_presence = {}
+        all_sources = set(value['source'] for value in self.hmm_dict.values())
+        for sample_name in self.names_list:
+            contigs_db_path = self.contigs_db_name_path_dict[sample_name]
+            database = db.DB(contigs_db_path, None, ignore_version=True)
+            sources_in_db = set(database.get_table_as_dict('hmm_hits_info').keys())
+            database.disconnect()
+            for source in all_sources:
+                self.hmm_source_presence[(sample_name, source)] = source in sources_in_db
 
         # Make variables that tells whether we have metagenomes.txt, external-genomes.txt, or both
         if self.metagenomes and not self.external_genomes:
