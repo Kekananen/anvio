@@ -218,6 +218,25 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
             for source in all_sources:
                 self.hmm_source_presence[(sample_name, source)] = source in sources_in_db
 
+        # Pre-compute Path A/B decision for each (sample, source).
+        # Path A: HMMs pre-exist in contigs DB AND no non-empty domtblout
+        #         from a prior anvi-run-hmms run (i.e. this is a fresh run
+        #         on samples where anvi-run-hmms was already run externally).
+        # Path B: HMMs must be computed by anvi-run-hmms within the workflow,
+        #         or a previous run left a non-empty domtblout (rerun stability).
+        #         In Path B, survivors are bare gene caller IDs; in Path A,
+        #         survivors have full deflines matching the combined hmmsearch.
+        self.path_is_a = {}
+        for sample_name in self.names_list:
+            for source in all_sources:
+                domtblout_path = os.path.join(
+                    self.dirs_dict['HMM_HITS_DIR'], sample_name,
+                    f"{source}-dom-hmmsearch", "hmm.domtable",
+                )
+                real_domtblout = os.path.exists(domtblout_path) and os.path.getsize(domtblout_path) > 0
+                hmm_present = self.hmm_source_presence.get((sample_name, source), False)
+                self.path_is_a[(sample_name, source)] = hmm_present and not real_domtblout
+
         # Make variables that tells whether we have metagenomes.txt, external-genomes.txt, or both
         if self.metagenomes and not self.external_genomes:
             self.mode = 'metagenomes'

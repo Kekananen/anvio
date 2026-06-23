@@ -74,23 +74,14 @@ def get_hmm_hits_txt(contigs_db, out_file):
     database.disconnect()
 
 
-def _is_path_a(sample_name, hmm_source):
-    """True if sample truly uses group-level HMM filtering (Path A).
-
-    Path A requires HMMs to pre-exist in the contigs DB AND no non-empty
-    domtblout from anvi-run-hmms (which would indicate a rerun of Path B).
-    """
-    domtblout = os.path.join(
-        dirs_dict["HMM_HITS_DIR"], sample_name,
-        f"{hmm_source}-dom-hmmsearch", "hmm.domtable",
-    )
-    real_domtblout = os.path.exists(domtblout) and os.path.getsize(domtblout) > 0
-    return M.hmm_source_presence.get((sample_name, hmm_source), False) \
-           and not real_domtblout
-
-
 def get_extract_done_files(wildcards):
-    """Return list of extract_hmm_hit_seqs .done files for Path A samples only."""
+    """Return list of extract_hmm_hit_seqs .done files for Path A samples only.
+
+    Path A: HMMs pre-exist in the contigs DB and no non-empty domtblout
+    from anvi-run-hmms was left behind. These samples use group-level HMM
+    search and filtering (cat_hmm_hit_seqs → hmmsearch_combined →
+    filter_hmm_hits_combined). Path B samples run per-sample instead.
+    """
     return [
         os.path.join(
             dirs_dict["HMM_HITS_DIR"], sample,
@@ -98,7 +89,7 @@ def get_extract_done_files(wildcards):
             "contigs-hmm-extracted.done",
         )
         for sample in M.names_list
-        if _is_path_a(sample, wildcards.hmm_source)
+        if M.path_is_a[(sample, wildcards.hmm_source)]
     ]
 
 
@@ -110,7 +101,7 @@ def get_process_hmm_hits_input(wildcards):
     Path B (DB lacks HMMs, or anvi-run-hmms ran in a previous attempt)
         → per-sample survivors from filter_hmm_hits_sample.
     """
-    if _is_path_a(wildcards.sample_name, wildcards.hmm_source):
+    if M.path_is_a[(wildcards.sample_name, wildcards.hmm_source)]:
         hmm_key = f"{wildcards.hmm_source}_{wildcards.hmm_name}"
         group = M.hmm_dict[hmm_key]['group']
         return os.path.join(
@@ -201,10 +192,19 @@ rule extract_hmm_hit_seqs:
         alphabet = target.split(':')[0]
         defline_fmt = f"{wildcards.sample_name}__{hmm_source}__{{gene_name}}__{{gene_callers_id}}"
 
+        # Narrow to the specific HMM gene name(s) declared in hmm_list.txt
+        # instead of extracting the entire collection. All names are from
+        # M.hmm_dict entries that share this source.
+        gene_names = ' '.join(sorted(set(
+            v['name'] for v in M.hmm_dict.values()
+            if v['source'] == hmm_source
+        )))
+
         if alphabet == 'AA':
             raw_faa = os.path.join(hmmer_output_dir, "raw_hits.faa")
             shell("anvi-get-sequences-for-hmm-hits -c {contigs_db_path} \
                                                      --hmm-sources {hmm_source} \
+                                                     --gene-names {gene_names} \
                                                      --get-aa-sequences \
                                                      -o {raw_faa} \
                                                      --defline-format \"{defline_fmt}\" \
@@ -213,6 +213,7 @@ rule extract_hmm_hit_seqs:
             raw_faa = os.path.join(hmmer_output_dir, "raw_hits.fna")
             shell("anvi-get-sequences-for-hmm-hits -c {contigs_db_path} \
                                                      --hmm-sources {hmm_source} \
+                                                     --gene-names {gene_names} \
                                                      -o {raw_faa} \
                                                      --defline-format \"{defline_fmt}\" \
                                                      --just-do-it >> {log} 2>&1")
@@ -389,7 +390,7 @@ rule filter_hmm_hits_combined:
 
             passing = len(survivors)
 
-        with open(log, 'w') as f:
+        with open(str(log), 'w') as f:
             f.write(f"Model coverage threshold: {params.min_model_coverage}\n")
             f.write(f"Total hits in domtblout: {total}\n")
             f.write(f"Hits passing filter: {passing}\n")
@@ -449,7 +450,7 @@ rule filter_hmm_hits_sample:
 
             passing = len(survivors)
 
-        with open(log, 'w') as f:
+        with open(str(log), 'w') as f:
             f.write(f"Model coverage threshold: {params.min_model_coverage}\n")
             f.write(f"Total hits in domtblout: {total}\n")
             f.write(f"Hits passing filter: {passing}\n")
@@ -524,8 +525,8 @@ rule process_hmm_hits:
         # Read survivor headers from input (resolved by get_process_hmm_hits_input)
         survivor_path = input.survivors
 
-        # Determine which path we're on based on the contigs DB
-        is_path_b = not M.hmm_source_presence[(sample_name, hmm_source)]
+        # Determine which path we're on – must match get_process_hmm_hits_input's logic
+        is_path_b = not M.path_is_a[(sample_name, hmm_source)]
 
         survivors = []
         survivor_gene_callers_ids = []
