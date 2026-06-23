@@ -147,14 +147,17 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
                     self.metagenomes_name_list = list(self.metagenomes_dict.keys())
                     self.metagenomes_path_list = [value['contigs_db_path'] for key,value in self.metagenomes_dict.items()]
 
+                    self.run.info('Genome sanity check completed successfully for %d metagenomes.' % len(self.metagenomes_name_list))
+
                     with open(sanity_checked_metagenomes_file, 'w') as fp:
                         pass
                 else:
-                    self.run.warning("You have declared run_genomes_sanity_check == false. anvi'o takes no responsibility "
-                                     "for any genomes or metagenomes that cause issues downstream in ecophylo.")
+                    self.run.info('Genome sanity check already completed (sentinel found). Skipping.')
                     self.metagenomes_name_list = self.metagenomes_df.name.to_list()
                     self.metagenomes_path_list = self.metagenomes_df.contigs_db_path.to_list()
             else:
+                self.run.warning("You have declared run_genomes_sanity_check == false. anvi'o takes no responsibility "
+                                 "for any genomes or metagenomes that cause issues downstream in ecophylo.")
                 self.metagenomes_name_list = self.metagenomes_df.name.to_list()
                 self.metagenomes_path_list = self.metagenomes_df.contigs_db_path.to_list()
 
@@ -162,7 +165,6 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
 
             if 'bam' in self.metagenomes_df.columns:
                 self.contigs_db_name_bam_dict.update(dict(zip(self.metagenomes_name_list, self.metagenomes_df.bam)))
-                self.metagenomes_profiles_list = self.metagenomes_df.bam.to_list()
 
             self.names_list.extend(self.metagenomes_name_list)
 
@@ -185,12 +187,17 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
                     self.external_genomes_names_list = list(self.external_genomes_dict.keys())
                     self.external_genomes_path_list = [value['contigs_db_path'] for key,value in self.external_genomes_dict.items()]
 
+                    self.run.info('Genome sanity check completed successfully for %d genomes.' % len(self.external_genomes_names_list))
+
                     with open(sanity_checked_genomes_file, 'w') as fp:
                         pass
                 else:
+                    self.run.info('Genome sanity check already completed (sentinel found). Skipping.')
                     self.external_genomes_names_list = self.external_genomes_df.name.to_list()
                     self.external_genomes_path_list = self.external_genomes_df.contigs_db_path.to_list()
             else:
+                self.run.warning("You have declared run_genomes_sanity_check == false. anvi'o takes no responsibility "
+                                 "for any genomes or metagenomes that cause issues downstream in ecophylo.")
                 self.external_genomes_names_list = self.external_genomes_df.name.to_list()
                 self.external_genomes_path_list = self.external_genomes_df.contigs_db_path.to_list()
 
@@ -198,7 +205,6 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
 
             if 'bam' in self.external_genomes_df.columns:
                 self.contigs_db_name_bam_dict.update(dict(zip(self.external_genomes_names_list, self.external_genomes_df.bam)))
-                self.external_genomes_profiles_list = self.external_genomes_df.bam.to_list()
 
             self.names_list.extend(self.external_genomes_names_list)
 
@@ -325,7 +331,7 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         self.target_files = self.get_target_files()
 
     def get_default_config(self):
-        """Return default config with output_dirs limited to our 8 canonical keys."""
+        """Return default config with output_dirs limited to our 8 canonical top-level output dirs."""
         c = super().get_default_config()
         c["output_dirs"].pop("QC_DIR", None)
         return c
@@ -449,7 +455,8 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
         self.hmm_dict = hmm_df.set_index('id').to_dict('index')
 
         # FIXME: this line prints the list of hmm_sources to stdout and I don't want that
-        self.internal_hmm_sources = list(anvio.data.hmm.sources.keys())
+        with terminal.SuppressAllOutput():
+            self.internal_hmm_sources = list(anvio.data.hmm.sources.keys())
 
         # make a list of unique hmm source
         self.unique_hmm_source = {}

@@ -86,9 +86,6 @@
         "anvi_gen_contigs_database_reps": {
             "threads": {"type": "int", "default": 2}
         },
-        "anvi_run_scg_taxonomy_reps": {
-            "threads": {"type": "int", "default": 2}
-        },
         "anvi_estimate_scg_taxonomy_reps": {
             "threads": {"type": "int", "default": 5}
         },

@@ -4,11 +4,11 @@ Narrow end of the workflow funnel!
 
 In this rule output files from metagenomes, genomes, SAGs, and MAGs all come together here!
 
-cat all neccessary files:
+cat all necessary files:
     - AA sequences
     - NT sequences
     - header reformat files
-    - external-gene-calls sequences and reformat_files from seperate metagenomes, genomes, SAGs, or MAGs into one fasta
+    - external-gene-calls sequences and reformat_files from separate metagenomes, genomes, SAGs, or MAGs into one fasta
 
 """
     input:
@@ -36,8 +36,6 @@ cat all neccessary files:
         rule_log("combine_sequence_data", "combine_sequence_data_{group}"),
     threads: M.T("combine_sequence_data")
     run:
-        import os
-
         # this code checks for existing hits per hmm per sample.
         # TODO: do the check at the previous step and provide list of sample for this rule
         # get list of unique hmm sources and hmm names from the group
@@ -93,8 +91,7 @@ cat all neccessary files:
                     f"contigDBs_with_no_hmm_hit_{hmm_source}-{hmm_name}.log",
                 )
                 with open(outfile, "a") as outfile:
-                    for element in contigs_db_with_hmm_NO_hits:
-                        outfile.write(element + "\n")
+                    outfile.write("\n".join(contigs_db_with_hmm_NO_hits) + "\n")
         # time to merge all these files
         import tempfile
 

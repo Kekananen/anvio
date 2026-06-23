@@ -56,9 +56,9 @@ def get_hmm_hits_txt(contigs_db, out_file):
     """Extract the hmm_hits table from a contigs-db."""
     database = db.DB(contigs_db, None, ignore_version=True)
     tables_in_database = database.get_table_names()
-    args_table = "hmm_hits"
+    table_name = "hmm_hits"
 
-    if args_table not in tables_in_database:
+    if table_name not in tables_in_database:
         column_names = [
             "entry_id", "source", "gene_unique_identifier",
             "gene_callers_id", "gene_name", "gene_hmm_id", "e_value",
@@ -66,7 +66,7 @@ def get_hmm_hits_txt(contigs_db, out_file):
         df = pd.DataFrame(columns=column_names)
         df.to_csv(out_file, sep="\t", index=False, header=True)
     else:
-        table_columns = database.get_table_structure(args_table)
+        table_columns = database.get_table_structure(table_name)
         table_content = database.get_table_as_dataframe(
             args_table, columns_of_interest=table_columns, error_if_no_data=False
         )
@@ -122,7 +122,7 @@ def get_process_hmm_hits_input(wildcards):
 # --------------------------------------------------------------------------------
 
 rule extract_hmm_hit_seqs:
-    """Extract AA sequences per (sample, source) with pipe-delimited headers, removing partial gene calls."""
+    """Extract AA sequences per (sample, source) with double-underscore-delimited headers, removing partial gene calls."""
     output:
         faa=os.path.join(
             dirs_dict["HMM_HITS_DIR"],
@@ -314,7 +314,6 @@ rule hmmsearch_combined:
             ["hmmsearch_combined", "additional_params"]
         ),
     run:
-        from Bio import SeqIO
         fasta_path = input.combined
 
         # Skip if combined FASTA is empty
@@ -555,7 +554,7 @@ rule process_hmm_hits:
                         survivor_gene_callers_ids.append(gid)
                         survivors.append(f"{sample_name}__{hmm_source}__{hmm_name}__{gid}")
         else:
-            # Path A: survivors are full pipe-delimited headers
+            # Path A: survivors are full double-underscore-delimited headers
             prefix = f"{sample_name}__{hmm_source}__{hmm_name}__"
             with open(survivor_path) as f:
                 for line in f:

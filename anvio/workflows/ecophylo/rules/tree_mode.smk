@@ -8,7 +8,7 @@ rule make_anvio_state_file_tree:
             dirs_dict["PROFILE_DIR"], "{group}", "{group}_TREE_state.json"
         ),
     log:
-        rule_log("make_anvio_state_file_tree", "make_anvio_state_file_{group}"),
+        rule_log("make_anvio_state_file_tree", "make_anvio_state_file_tree_{group}"),
     threads: M.T("make_anvio_state_file")
     params:
         tax_data_final=os.path.join(
@@ -138,17 +138,14 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
         tree_profileDB=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}-PROFILE.db"),
     run:
         # Make place holder profileDB for tree
-        import anvio
-        import anvio.utils as utils
         import anvio.filesnpaths as filesnpaths
-        from anvio.dbops import ProfileSuperclass, ProfileDatabase
+        from anvio.dbops import ProfileDatabase
 
         filesnpaths.is_file_exists(input.tree)
         newick_tree_text = "".join(
             [l.strip() for l in open(os.path.abspath(input.tree)).readlines()]
         )
         p_meta = {}
-        views = {}
         p_meta["output_dir"] = None
         p_meta["views"] = {}
         p_meta["db_type"] = "profile"

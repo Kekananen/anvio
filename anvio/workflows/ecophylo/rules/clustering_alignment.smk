@@ -21,7 +21,7 @@ rule cluster_X_percent_sim_mmseqs:
             )
         ),
     log:
-        rule_log("cluster_X_percent_sim_mmseqs", "cluster_X_mmseqs_{group}"),
+        rule_log("cluster_X_percent_sim_mmseqs", "cluster_X_percent_sim_mmseqs_{group}"),
     threads: M.T("cluster_X_percent_sim_mmseqs")
     params:
         output_prefix=os.path.join(
@@ -53,13 +53,11 @@ rule cluster_X_percent_sim_mmseqs:
                 f"{wildcards.group}-all.fna",
             )
         # Exit workflow if we couldn't find any hmm-hits
-        from Bio import SeqIO
-
         fasta_dict = SeqIO.index(fasta, "fasta")
         if len(fasta_dict) == 0:
             raise ConfigError(
                 f"anvi'o and the EcoPhylo workflow are sad to announce that the "
-                f"hmm, {wildcards.group}, was not not found in any of your contigs_dbs"
+                f"hmm, {wildcards.group}, was not found in any of your contigs_dbs"
             )
         shell(
             f"mmseqs easy-cluster {fasta} \
@@ -329,19 +327,15 @@ rule count_num_sequences_filtered:
         combined_seq=rules.combine_sequence_data.output.NT_all,
         cluster_mmseqs=rules.cluster_X_percent_sim_mmseqs.output.fasta,
     run:
-        def count_num_sequences(fasta):
-            num_seqs = 0
-            for line in fasta:
-                if line.startswith(">"):
-                    num_seqs += 1
-            return num_seqs
+        def count_num_sequences(fasta_path):
+            return len(SeqIO.index(fasta_path, "fasta"))
         input_files_list = [
             params.combined_seq,
             params.cluster_mmseqs,
             input.remove_seq_with_gaps,
         ]
         num_seqs_list = [
-            count_num_sequences(open(fasta)) for fasta in input_files_list
+            count_num_sequences(fasta) for fasta in input_files_list
         ]
         with open(output.target, "w") as f:
             col_names = ["rule_name", "num_sequences_left", "rel_path"]
@@ -382,8 +376,6 @@ if not M.AA_mode:
             rule_log("build_rep_external_gene_calls", "build_rep_external_gene_calls_{group}"),
         threads: M.T("build_rep_external_gene_calls")
         run:
-            from Bio import SeqIO
-
             rep_headers = set(rec.id for rec in SeqIO.parse(input.reps, "fasta"))
 
             egc = pd.read_csv(input.egc_all, sep="\t")
@@ -437,9 +429,10 @@ if not M.AA_mode:
         threads: M.T("anvi_run_scg_taxonomy")
         params:
             additional_params=M.get_param_value_from_config(["anvi_run_scg_taxonomy", "additional_params"]),
-        shell:
-            "anvi-run-hmms -c {input.db} --num-threads {threads} >> {log} 2>&1 && \
-             anvi-run-scg-taxonomy -c {input.db} --num-threads {threads} {params.additional_params} >> {log} 2>&1"
+        run:
+            if M.run_scg_taxonomy:
+                shell("anvi-run-hmms -c {input.db} --num-threads {threads} >> {log} 2>&1 && \
+                       anvi-run-scg-taxonomy -c {input.db} --num-threads {threads} {params.additional_params} >> {log} 2>&1")
 
     rule anvi_estimate_scg_taxonomy_reps:
         """Export SCG taxonomy for each representative from the reps contigs DB"""
@@ -449,27 +442,33 @@ if not M.AA_mode:
             done=touch(os.path.join(dirs_dict["PROFILE_DIR"], "{group}", "anvi_estimate_scg_taxonomy_for_SCGs.done")),
             tax_data_final=os.path.join(dirs_dict["PROFILE_DIR"], "{group}", "{group}_scg_taxonomy_data.tsv"),
         log:
-            rule_log("anvi_estimate_scg_taxonomy_reps", "anvi_scg_taxonomy_reps_{group}"),
+            rule_log("anvi_estimate_scg_taxonomy_reps", "anvi_estimate_scg_taxonomy_reps_{group}"),
         threads: M.T("anvi_estimate_scg_taxonomy")
         run:
-            reps_db = os.path.join(dirs_dict["CONTIGS_DIR"], f"{wildcards.group}.db")
+            if M.run_scg_taxonomy:
+                reps_db = os.path.join(dirs_dict["CONTIGS_DIR"], f"{wildcards.group}.db")
 
-            # Read SCG taxonomy directly from the contigs DB (populated by anvi-run-scg-taxonomy)
-            anvio_db = db.DB(reps_db, None, ignore_version=True)
+                anvio_db = db.DB(reps_db, None, ignore_version=True)
 
-            scg_taxonomy_dict = anvio_db.get_table_as_dict('scg_taxonomy')
-            scg_taxonomy = pd.DataFrame.from_dict(scg_taxonomy_dict, orient='index')
+                scg_taxonomy_dict = anvio_db.get_table_as_dict('scg_taxonomy')
+                scg_taxonomy = pd.DataFrame.from_dict(scg_taxonomy_dict, orient='index')
 
-            genes_dict = anvio_db.get_table_as_dict('genes_in_contigs')
-            gene_to_contig = {gcid: row['contig'] for gcid, row in genes_dict.items()}
-            scg_taxonomy['split_name'] = scg_taxonomy.index.map(
-                lambda gcid: f"{gene_to_contig[gcid]}_split_00001"
-            )
-            scg_taxonomy['identifier'] = scg_taxonomy.index.astype(str)
+                genes_dict = anvio_db.get_table_as_dict('genes_in_contigs')
+                gene_to_contig = {gcid: row['contig'] for gcid, row in genes_dict.items()}
+                scg_taxonomy['split_name'] = scg_taxonomy.index.map(
+                    lambda gcid: f"{gene_to_contig[gcid]}_split_00001"
+                )
+                scg_taxonomy['identifier'] = scg_taxonomy.index.astype(str)
 
-            expected_columns = ["split_name", "identifier", "percent_identity",
-                                "t_domain", "t_phylum", "t_class", "t_order",
-                                "t_family", "t_genus", "t_species"]
-            available_columns = [c for c in expected_columns if c in scg_taxonomy.columns]
-            scg_taxonomy = scg_taxonomy[available_columns]
-            scg_taxonomy.to_csv(output.tax_data_final, sep="\t", index=None, na_rep="NA")
+                expected_columns = ["split_name", "identifier", "percent_identity",
+                                    "t_domain", "t_phylum", "t_class", "t_order",
+                                    "t_family", "t_genus", "t_species"]
+                available_columns = [c for c in expected_columns if c in scg_taxonomy.columns]
+                scg_taxonomy = scg_taxonomy[available_columns]
+                scg_taxonomy.to_csv(output.tax_data_final, sep="\t", index=None, na_rep="NA")
+            else:
+                # Write empty TSV with headers so downstream os.path.isfile() checks pass
+                expected_columns = ["split_name", "identifier", "percent_identity",
+                                    "t_domain", "t_phylum", "t_class", "t_order",
+                                    "t_family", "t_genus", "t_species"]
+                pd.DataFrame(columns=expected_columns).to_csv(output.tax_data_final, sep="\t", index=None)

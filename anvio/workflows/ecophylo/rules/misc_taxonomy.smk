@@ -73,7 +73,7 @@ def extract_misc_data(mmseqs_cluster_rep_index, final_sequences_headers, output)
     )
 
     # Determine contigs_db type: metagenome or genomes
-    # FIXME: This will need to be changed in the future to accomidate SAGs, MAGs, and other genomic sources
+    # FIXME: This will need to be changed in the future to accommodate SAGs, MAGs, and other genomic sources
     # If metagenome_name is in external_genomes_names_list then it's a genome
     contigs_db_type_dict = {}
     for name in list(df.cluster_members):

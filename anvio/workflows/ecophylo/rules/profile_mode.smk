@@ -88,9 +88,7 @@ rule make_anvio_state_file:
         #                             index_col=None)
         # layer-orders
         first_layers = ["__parent__", "length", "gc_content"]
-        metagenomes = []
-        for metagenome in M.sample_names_for_mapping_list:
-            metagenomes.append(metagenome)
+        metagenomes = list(M.sample_names_for_mapping_list)
         layer_order = first_layers + metagenomes + misc_layers_list
         # Read in misc data headers for layer_order
         if os.path.isfile(params.tax_data_final):
@@ -216,7 +214,7 @@ If samples.txt is NOT provided then we will make an Ad Hoc profileDB for the tre
         rule_log("anvi_import_everything_metagenome", "anvi_import_state_{group}"),
     threads: M.T("anvi_import_state")
     params:
-        tax_data_final=rules.anvi_estimate_scg_taxonomy_reps.output.tax_data_final,
+        tax_data_final=os.path.join(dirs_dict["PROFILE_DIR"], "{group}", "{group}_scg_taxonomy_data.tsv"),
         profileDB=os.path.join(dirs_dict["MERGE_DIR"], "{group}", "PROFILE.db"),
         tree_profileDB=os.path.join(dirs_dict["PHYLO"], "{group}", "{group}-PROFILE.db"),
         misc_data=rules.make_misc_data.output.misc_data_final,
