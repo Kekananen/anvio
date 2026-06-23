@@ -74,6 +74,21 @@ def get_hmm_hits_txt(contigs_db, out_file):
     database.disconnect()
 
 
+def _is_path_a(sample_name, hmm_source):
+    """True if sample truly uses group-level HMM filtering (Path A).
+
+    Path A requires HMMs to pre-exist in the contigs DB AND no non-empty
+    domtblout from anvi-run-hmms (which would indicate a rerun of Path B).
+    """
+    domtblout = os.path.join(
+        dirs_dict["HMM_HITS_DIR"], sample_name,
+        f"{hmm_source}-dom-hmmsearch", "hmm.domtable",
+    )
+    real_domtblout = os.path.exists(domtblout) and os.path.getsize(domtblout) > 0
+    return M.hmm_source_presence.get((sample_name, hmm_source), False) \
+           and not real_domtblout
+
+
 def get_extract_done_files(wildcards):
     """Return list of extract_hmm_hit_seqs .done files for Path A samples only."""
     return [
@@ -83,32 +98,32 @@ def get_extract_done_files(wildcards):
             "contigs-hmm-extracted.done",
         )
         for sample in M.names_list
-        if M.hmm_source_presence[(sample, wildcards.hmm_source)]
+        if _is_path_a(sample, wildcards.hmm_source)
     ]
 
 
 def get_process_hmm_hits_input(wildcards):
     """Return the survivors path based on whether the sample's contigs DB has HMMs.
 
-    Path A (DB has HMMs) → group-level survivors from filter_hmm_hits_combined.
-    Path B (DB lacks HMMs) → per-sample survivors from filter_hmm_hits_sample.
+    Path A (DB has HMMs, no non-empty domtblout from anvi-run-hmms)
+        → group-level survivors from filter_hmm_hits_combined.
+    Path B (DB lacks HMMs, or anvi-run-hmms ran in a previous attempt)
+        → per-sample survivors from filter_hmm_hits_sample.
     """
-    if M.hmm_source_presence[(wildcards.sample_name, wildcards.hmm_source)]:
-        # Path A: group-level survivors (from filter_hmm_hits_combined)
+    if _is_path_a(wildcards.sample_name, wildcards.hmm_source):
         hmm_key = f"{wildcards.hmm_source}_{wildcards.hmm_name}"
         group = M.hmm_dict[hmm_key]['group']
         return os.path.join(
             dirs_dict["HMM_HITS_DIR"], group,
             f"{group}_{wildcards.hmm_source}_survivor_headers.txt",
         )
-    else:
-        # Path B: per-sample survivors (from filter_hmm_hits_sample)
-        return os.path.join(
-            dirs_dict["HMM_HITS_DIR"],
-            wildcards.sample_name,
-            f"{wildcards.hmm_source}-dom-hmmsearch",
-            f"{wildcards.sample_name}_{wildcards.hmm_source}_survivor_headers.txt",
-        )
+
+    return os.path.join(
+        dirs_dict["HMM_HITS_DIR"],
+        wildcards.sample_name,
+        f"{wildcards.hmm_source}-dom-hmmsearch",
+        f"{wildcards.sample_name}_{wildcards.hmm_source}_survivor_headers.txt",
+    )
 
 
 # --------------------------------------------------------------------------------
