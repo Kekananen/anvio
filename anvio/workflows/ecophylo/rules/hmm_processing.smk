@@ -184,7 +184,7 @@ rule extract_hmm_hit_seqs:
 
         target = get_hmm_target(hmm_source)
         alphabet = target.split(':')[0]
-        defline_fmt = f"{wildcards.sample_name}|{hmm_source}|{{gene_name}}|{{gene_callers_id}}"
+        defline_fmt = f"{wildcards.sample_name}__{hmm_source}__{{gene_name}}__{{gene_callers_id}}"
 
         if alphabet == 'AA':
             raw_faa = os.path.join(hmmer_output_dir, "raw_hits.faa")
@@ -214,7 +214,7 @@ rule extract_hmm_hit_seqs:
                     keep = True
                     for line in f_in:
                         if line.startswith('>'):
-                            gid = line.strip().rsplit('|', 1)[-1]
+                            gid = line.strip().rsplit('__', 1)[-1]
                             keep = gid not in partial_ids
                             if keep:
                                 f_out.write(line)
@@ -501,15 +501,15 @@ rule process_hmm_hits:
                     gid = line.strip()
                     if gid:
                         survivor_gene_callers_ids.append(gid)
-                        survivors.append(f"{sample_name}|{hmm_source}|{hmm_name}|{gid}")
+                        survivors.append(f"{sample_name}__{hmm_source}__{hmm_name}__{gid}")
         else:
             # Path A: survivors are full pipe-delimited headers
-            prefix = f"{sample_name}|{hmm_source}|{hmm_name}|"
+            prefix = f"{sample_name}__{hmm_source}__{hmm_name}__"
             with open(survivor_path) as f:
                 for line in f:
                     line = line.strip()
                     if line.startswith(prefix):
-                        gid = line.rsplit('|', 1)[-1]
+                        gid = line.rsplit('__', 1)[-1]
                         survivors.append(line)
                         survivor_gene_callers_ids.append(gid)
 
@@ -522,7 +522,7 @@ rule process_hmm_hits:
             pd.DataFrame(columns=col_names).to_csv(output.egc_renamed, sep="\t", index=False)
         else:
             # Step C1: Extract AA sequences with defline format matching survivor headers
-            aa_fmt = f"{sample_name}|{hmm_source}|{hmm_name}|{{gene_callers_id}}"
+            aa_fmt = f"{sample_name}__{hmm_source}__{hmm_name}__{{gene_callers_id}}"
             aa_all = os.path.join(fasta_output_dir, "aa_all.faa")
             shell("anvi-get-sequences-for-hmm-hits -c {contigs_db} \
                                                      --hmm-sources {hmm_source} \
@@ -551,24 +551,28 @@ rule process_hmm_hits:
             raw_nt = os.path.join(fasta_output_dir, "raw_nt.fna")
             raw_egc = os.path.join(fasta_output_dir, "raw_egc.tsv")
             shell("anvi-get-sequences-for-gene-calls -c {contigs_db} \
-                                                      --gene-caller-ids {gid_str} \
-                                                      --external-gene-calls {raw_egc} \
-                                                      -o {raw_nt} >> {log} 2>&1")
+                                                       --gene-caller-ids {gid_str} \
+                                                       --external-gene-calls {raw_egc} \
+                                                       -o {raw_nt} >> {log} 2>&1")
 
-            # Post-process NT FASTA headers to match global format
-            nt_prefix = f">{sample_name}|{hmm_source}|{hmm_name}|"
+            # Post-process NT FASTA headers and EGC with matching numeric identifiers
+            egc = pd.read_csv(raw_egc, delim_whitespace=True, index_col=False)
+            contig_to_gid = dict(zip(egc['contig'].astype(str),
+                                    egc['gene_callers_id'].astype(str)))
+
             with open(raw_nt) as f_in, open(output.nt_fasta, 'w') as f_out:
                 for line in f_in:
                     if line.startswith('>'):
-                        f_out.write(f"{nt_prefix}{line[1:]}")
+                        raw_id = line[1:].strip()
+                        gid = contig_to_gid.get(raw_id, raw_id)
+                        f_out.write(f">{sample_name}__{hmm_source}__{hmm_name}__{gid}\n")
                     else:
                         f_out.write(line)
             os.unlink(raw_nt)
 
             # Post-process EGC: add header column with global identifier,
             # keep original contig column for bam-based coverage joins
-            egc = pd.read_csv(raw_egc, delim_whitespace=True, index_col=False)
-            egc['header'] = [f"{sample_name}|{hmm_source}|{hmm_name}|{gid}"
+            egc['header'] = [f"{sample_name}__{hmm_source}__{hmm_name}__{gid}"
                              for gid in egc['gene_callers_id'].astype(str)]
             egc.to_csv(output.egc_renamed, sep="\t", index=False)
             os.unlink(raw_egc)

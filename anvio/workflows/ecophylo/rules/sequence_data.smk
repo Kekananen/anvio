@@ -36,6 +36,8 @@ cat all neccessary files:
         rule_log("combine_sequence_data", "combine_sequence_data_{group}"),
     threads: M.T("combine_sequence_data")
     run:
+        import os
+
         # this code checks for existing hits per hmm per sample.
         # TODO: do the check at the previous step and provide list of sample for this rule
         # get list of unique hmm sources and hmm names from the group
@@ -94,7 +96,7 @@ cat all neccessary files:
                     for element in contigs_db_with_hmm_NO_hits:
                         outfile.write(element + "\n")
         # time to merge all these files
-        import tempfile, os
+        import tempfile
 
         nt_list = tempfile.NamedTemporaryFile(mode='w', delete=False)
         for f in NT_list:

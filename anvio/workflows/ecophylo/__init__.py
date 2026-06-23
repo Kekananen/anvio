@@ -329,7 +329,7 @@ class EcoPhyloWorkflow(ReadRecruitmentModule, WorkflowSuperClass):
 
             if not self.samples_txt_file:
                 # TREE-MODE
-                target_file = os.path.join(self.dirs_dict['TREES'], f"{group}", "state_imported_tree.done")
+                target_file = os.path.join(self.dirs_dict['PHYLO'], f"{group}", "state_imported_tree.done")
                 target_files.append(target_file)
 
             else:
